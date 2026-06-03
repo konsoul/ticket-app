@@ -119,11 +119,13 @@ function setupEventListeners() {
   });
 
   // Hourly Wage persistence
-  elements.hourlyWageInput.value = localStorage.getItem('ts_hourly_wage') || '0';
-  elements.hourlyWageInput.addEventListener('input', () => {
-    localStorage.setItem('ts_hourly_wage', elements.hourlyWageInput.value);
-    renderTimesheetHistory();
-  });
+  if (elements.hourlyWageInput) {
+    elements.hourlyWageInput.value = localStorage.getItem('ts_hourly_wage') || '0';
+    elements.hourlyWageInput.addEventListener('input', () => {
+      localStorage.setItem('ts_hourly_wage', elements.hourlyWageInput.value);
+      renderTimesheetHistory();
+    });
+  }
 
   // FAB to open New Ticket
   elements.newTicketFab.addEventListener('click', () => {
@@ -862,7 +864,7 @@ async function refreshTimesheet() {
 function renderTimesheetHistory() {
   elements.tsHistoryList.innerHTML = '';
   
-  const wageRate = parseFloat(elements.hourlyWageInput.value) || 0;
+  const wageRate = elements.hourlyWageInput ? (parseFloat(elements.hourlyWageInput.value) || 0) : 0;
 
   if (allTimesheets.length === 0) {
     elements.tsHistoryList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">No timesheet history found.</div>';
