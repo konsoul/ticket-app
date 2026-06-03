@@ -61,6 +61,7 @@ const elements = {
   viewTimesheetTab: document.getElementById('viewTimesheetTab'),
   timesheetSection: document.getElementById('timesheetSection'),
   filterTabsContainer: document.querySelector('.filter-tabs'),
+  hourlyWageInput: document.getElementById('hourlyWageInput'),
   
   tsWeeklyTotal: document.getElementById('tsWeeklyTotal'),
   tsHistoryList: document.getElementById('tsHistoryList'),
@@ -115,6 +116,13 @@ function setupEventListeners() {
     btn.addEventListener('click', () => {
       closeAllModals();
     });
+  });
+
+  // Hourly Wage persistence
+  elements.hourlyWageInput.value = localStorage.getItem('ts_hourly_wage') || '0';
+  elements.hourlyWageInput.addEventListener('input', () => {
+    localStorage.setItem('ts_hourly_wage', elements.hourlyWageInput.value);
+    renderTimesheetHistory();
   });
 
   // FAB to open New Ticket
@@ -854,9 +862,11 @@ async function refreshTimesheet() {
 function renderTimesheetHistory() {
   elements.tsHistoryList.innerHTML = '';
   
+  const wageRate = parseFloat(elements.hourlyWageInput.value) || 0;
+
   if (allTimesheets.length === 0) {
     elements.tsHistoryList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">No timesheet history found.</div>';
-    elements.tsWeeklyTotal.textContent = 'Weekly Total: 0.0 hrs';
+    elements.tsWeeklyTotal.textContent = `Weekly Total: 0.0 hrs${wageRate > 0 ? ' ($0.00)' : ''}`;
     return;
   }
 
@@ -888,14 +898,24 @@ function renderTimesheetHistory() {
     const totalMins = calculateTimesheetMinutes(ts);
     const decimalHrs = (totalMins / 60).toFixed(2);
 
+    let earningsText = '';
+    if (wageRate > 0) {
+      const grossEarnings = (totalMins / 60) * wageRate;
+      const netEarnings = grossEarnings * (1 - 0.156);
+      earningsText = ` <span style="color: var(--primary-color); font-size: 11px; margin-top: 4px; display: block; font-weight: 600;">Gross: $${grossEarnings.toFixed(2)} | Net: $${netEarnings.toFixed(2)}</span>`;
+    }
+
     card.innerHTML = `
       <div class="history-left">
         <div class="history-date">${cleanDateFormatted}</div>
         <div class="history-times">${displayClockIn} - ${displayClockOut} | Lunch: ${ts.lunchDuration}m</div>
         ${ts.notes ? `<div class="history-notes" title="${escapeHTML(ts.notes)}">${escapeHTML(ts.notes)}</div>` : ''}
       </div>
-      <div class="history-right">
-        <div class="history-hours">${decimalHrs} hrs</div>
+      <div class="history-right" style="display: flex; align-items: center; gap: 12px; text-align: right;">
+        <div>
+          <div class="history-hours">${decimalHrs} hrs</div>
+          ${earningsText}
+        </div>
         <button class="history-edit-btn" data-ts-id="${ts.id}" aria-label="Edit timesheet entry">
           <!-- Pencil Edit Icon -->
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -912,7 +932,13 @@ function renderTimesheetHistory() {
   });
 
   const weeklyHours = (weeklyMinutes / 60).toFixed(1);
-  elements.tsWeeklyTotal.textContent = `Weekly Total: ${weeklyHours} hrs`;
+  let weeklyTotalText = `Weekly Total: ${weeklyHours} hrs`;
+  if (wageRate > 0) {
+    const weeklyGross = (weeklyMinutes / 60) * wageRate;
+    const weeklyNet = weeklyGross * (1 - 0.156);
+    weeklyTotalText += ` (Gross: $${weeklyGross.toFixed(2)} | Net: $${weeklyNet.toFixed(2)})`;
+  }
+  elements.tsWeeklyTotal.textContent = weeklyTotalText;
 }
 
 // Open modal for updating timesheet details
