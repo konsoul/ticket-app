@@ -78,31 +78,21 @@
 
     <!-- Timesheet View Container -->
     <section id="timesheetSection" class="timesheet-wrapper" style="display: none;">
-      <!-- Timesheet Main Card -->
-      <div class="timesheet-card">
-        <div class="timesheet-status-banner">
-          <div class="timesheet-status-label">Current State</div>
-          <div id="tsStatusText" class="timesheet-status-val">Clocked Out</div>
-        </div>
-        
-        <div class="timesheet-current-time">
-          <div id="tsDateDisplay">Wednesday, June 3</div>
-          <div id="tsWorkingTimeDisplay" class="timesheet-clock-time">0h 00m</div>
-          <div id="tsLunchDisplay" class="timesheet-lunch-subtext">Lunch: 0m</div>
-        </div>
-
-        <div class="timesheet-actions">
-          <button id="tsClockInBtn" class="btn btn-primary">Clock In</button>
-          <button id="tsLunchBtn" class="btn btn-secondary" disabled>Start Lunch</button>
-          <button id="tsClockOutBtn" class="btn btn-danger" disabled>Clock Out</button>
-        </div>
-      </div>
-
       <!-- Weekly Total & History Section -->
       <div class="timesheet-history-section">
         <div class="timesheet-history-header">
-          <h3>Daily History</h3>
-          <span id="tsWeeklyTotal" class="weekly-total">Weekly Total: 0.0 hrs</span>
+          <h3>Timesheets</h3>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="tsAddManualBtn" class="btn btn-primary" style="padding: 6px 10px; font-size: 12px; display: inline-flex;" title="Add Manual Entry" aria-label="Add Manual Entry">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add Entry
+            </button>
+            <button id="tsPrintBtn" class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; display: inline-flex;" title="Print Weekly Timesheet" aria-label="Print Weekly Timesheet">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              Print Week
+            </button>
+            <span id="tsWeeklyTotal" class="weekly-total">Weekly Total: 0.0 hrs</span>
+          </div>
         </div>
         
         <div id="tsHistoryList" class="timesheet-history-list">
@@ -255,7 +245,7 @@
           <input type="hidden" id="editTsId">
           <div class="form-group">
             <label for="editTsDate">Date</label>
-            <input type="date" id="editTsDate" class="form-control" readonly>
+            <input type="date" id="editTsDate" class="form-control" required>
           </div>
           <div class="form-group">
             <label for="editTsClockIn">Clock In Time</label>
@@ -274,11 +264,129 @@
             <input type="text" id="editTsNotes" class="form-control" placeholder="What did you work on today?">
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Entry</button>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <button type="button" id="editTsDeleteBtn" class="btn btn-danger" style="display: none;">Delete</button>
+          <div style="display: flex; gap: 8px; margin-left: auto;">
+            <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Entry</button>
+          </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: PRINT OPTIONS -->
+  <div id="printOptionsModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Print Timesheet</h2>
+        <button class="close-btn modal-close-trigger" aria-label="Close modal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="printOptionsForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="optEmpName">Employee Name</label>
+            <input type="text" id="optEmpName" class="form-control" placeholder="e.g. Brad Rappa" required>
+          </div>
+          <div class="form-group">
+            <label for="optDept">Department / Firm</label>
+            <input type="text" id="optDept" class="form-control" placeholder="e.g. Technical Field Service">
+          </div>
+          <div class="form-group">
+            <label for="optSupervisor">Supervisor Name</label>
+            <input type="text" id="optSupervisor" class="form-control" placeholder="e.g. John Doe">
+          </div>
+          <div class="form-group">
+            <label for="optWeekEnding">Week Ending Date (Saturday)</label>
+            <input type="date" id="optWeekEnding" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
+          <button type="submit" class="btn btn-primary">Generate Printout</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- HIDDEN PRINT CONTAINER (Only visible in Print view) -->
+  <div id="printContainer" class="print-only" style="font-family: 'Times New Roman', Times, serif; color: #000;">
+    
+    <!-- PDF Header Layout -->
+    <div class="print-header" style="text-align: center; margin-bottom: 20px;">
+      <img src="assets/titlogo_finalc.jpg" alt="TRUE IT, Inc. Logo" style="display: block; margin: 0 auto 10px; max-height: 190px; width: auto;">
+      <h2 style="font-size: 16pt; font-weight: bold; color: #000; margin: 0 0 15px 0; letter-spacing: 2px; text-transform: uppercase;">TIMESHEET</h2>
+      
+      <!-- Employee Name and Week Ending line -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; font-size: 12pt; margin-bottom: 12px;">
+        <div style="display: flex; flex: 1.5; align-items: flex-end;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Employee Name:</span>
+          <span id="printEmpName" style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; font-weight: bold; padding-bottom: 2px; min-height: 20px;">Brad Rappa</span>
+        </div>
+        <div style="display: flex; flex: 1; align-items: flex-end; margin-left: 30px;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Week Ending:</span>
+          <span id="printWeekEnding" style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; font-weight: bold; padding-bottom: 2px; min-height: 20px;">--</span>
+        </div>
+      </div>
+      
+      <!-- Management Approval line -->
+      <div style="display: flex; align-items: flex-end; font-size: 12pt; margin-bottom: 20px;">
+        <span style="white-space: nowrap; padding-bottom: 2px;">Management Approval:</span>
+        <span id="printSupervisor" style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; font-weight: bold; padding-bottom: 2px; min-height: 20px;"></span>
+      </div>
+    </div>
+    
+    <!-- Printable 7-column Table -->
+    <table class="print-table" style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 10pt;">
+      <thead>
+        <tr>
+          <th style="width: 14%; border: 1px solid #000; padding: 6px; text-align: left;"></th>
+          <th style="width: 10%; border: 1px solid #000; padding: 6px; text-align: center;">Date</th>
+          <th style="width: 11%; border: 1px solid #000; padding: 6px; text-align: center;">Time In</th>
+          <th style="width: 11%; border: 1px solid #000; padding: 6px; text-align: center;">Time Out</th>
+          <th style="width: 11%; border: 1px solid #000; padding: 6px; text-align: center;">Meal Break</th>
+          <th style="width: 11%; border: 1px solid #000; padding: 6px; text-align: center;">Hours Worked</th>
+          <th style="width: 32%; border: 1px solid #000; padding: 6px; text-align: center;">Comments:<br>Client/Projects:</th>
+        </tr>
+      </thead>
+      <tbody id="printTableBody">
+        <!-- Rows populated dynamically from Sunday to Saturday -->
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="border: none;"></td>
+          <td colspan="2" style="border: 1px solid #000; padding: 8px; text-align: center; font-weight: bold; text-transform: uppercase;">WEEKLY TOTALS:</td>
+          <td id="printTotalMeal" style="font-weight: bold; border: 1px solid #000; padding: 8px; text-align: center;"></td>
+          <td id="printTotalHours" style="font-weight: bold; border: 1px solid #000; padding: 8px; text-align: center;"></td>
+          <td style="border: 1px solid #000; padding: 8px;"></td>
+        </tr>
+      </tfoot>
+    </table>
+    
+    <!-- Signatures section matching PDF bottom lines -->
+    <div class="print-signatures" style="margin-top: 60px; font-size: 12pt; display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%;">
+        <div style="display: flex; flex: 2.2; align-items: flex-end;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Employee Signature:</span>
+          <span style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; padding-bottom: 2px; min-height: 20px;"></span>
+        </div>
+        <div style="display: flex; flex: 0.8; align-items: flex-end; margin-left: 40px;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Date:</span>
+          <span style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; padding-bottom: 2px; min-height: 20px;"></span>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%;">
+        <div style="display: flex; flex: 2.2; align-items: flex-end;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Supervisor Signature:</span>
+          <span style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; padding-bottom: 2px; min-height: 20px;"></span>
+        </div>
+        <div style="display: flex; flex: 0.8; align-items: flex-end; margin-left: 40px;">
+          <span style="white-space: nowrap; padding-bottom: 2px;">Date:</span>
+          <span style="flex: 1; border-bottom: 1px solid #000; margin-left: 5px; padding-bottom: 2px; min-height: 20px;"></span>
+        </div>
+      </div>
     </div>
   </div>
 

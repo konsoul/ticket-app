@@ -1,4 +1,4 @@
-const CACHE_NAME = 'field-tickets-cache-v2';
+const CACHE_NAME = 'field-tickets-cache-v8';
 const ASSETS = [
   './',
   './index.html',

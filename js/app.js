@@ -60,18 +60,12 @@ const elements = {
   viewTicketsTab: document.getElementById('viewTicketsTab'),
   viewTimesheetTab: document.getElementById('viewTimesheetTab'),
   timesheetSection: document.getElementById('timesheetSection'),
-  
-  tsStatusText: document.getElementById('tsStatusText'),
-  tsDateDisplay: document.getElementById('tsDateDisplay'),
-  tsWorkingTimeDisplay: document.getElementById('tsWorkingTimeDisplay'),
-  tsLunchDisplay: document.getElementById('tsLunchDisplay'),
-  
-  tsClockInBtn: document.getElementById('tsClockInBtn'),
-  tsLunchBtn: document.getElementById('tsLunchBtn'),
-  tsClockOutBtn: document.getElementById('tsClockOutBtn'),
+  filterTabsContainer: document.querySelector('.filter-tabs'),
   
   tsWeeklyTotal: document.getElementById('tsWeeklyTotal'),
   tsHistoryList: document.getElementById('tsHistoryList'),
+  tsPrintBtn: document.getElementById('tsPrintBtn'),
+  tsAddManualBtn: document.getElementById('tsAddManualBtn'),
   
   // Edit Timesheet Modal
   editTimesheetModal: document.getElementById('editTimesheetModal'),
@@ -81,7 +75,23 @@ const elements = {
   editTsClockIn: document.getElementById('editTsClockIn'),
   editTsLunchDuration: document.getElementById('editTsLunchDuration'),
   editTsClockOut: document.getElementById('editTsClockOut'),
-  editTsNotes: document.getElementById('editTsNotes')
+  editTsNotes: document.getElementById('editTsNotes'),
+  editTsDeleteBtn: document.getElementById('editTsDeleteBtn'),
+
+  // Print Settings Modal & Container
+  printOptionsModal: document.getElementById('printOptionsModal'),
+  printOptionsForm: document.getElementById('printOptionsForm'),
+  optEmpName: document.getElementById('optEmpName'),
+  optDept: document.getElementById('optDept'),
+  optSupervisor: document.getElementById('optSupervisor'),
+  optWeekEnding: document.getElementById('optWeekEnding'),
+  
+  printContainer: document.getElementById('printContainer'),
+  printEmpName: document.getElementById('printEmpName'),
+  printWeekEnding: document.getElementById('printWeekEnding'),
+  printSupervisor: document.getElementById('printSupervisor'),
+  printTableBody: document.getElementById('printTableBody'),
+  printTotalHours: document.getElementById('printTotalHours')
 };
 
 // Initialize Application
@@ -92,7 +102,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshTimesheet(); // Warm up timesheet views
     setupEventListeners();
     startGlobalTimersWatcher(); // Watch for running timers in lists
-    startGlobalTimesheetWatcher(); // Start live timesheet clock ticker
   } catch (error) {
     console.error('Failed to initialize App:', error);
     alert('Failed to initialize local database. Please refresh.');
@@ -346,70 +355,22 @@ function setupEventListeners() {
     switchView('timesheet');
   });
 
-  // Clock In Action
-  elements.tsClockInBtn.addEventListener('click', async () => {
-    const dateStr = getLocalDateStr();
+  // Removed live clock in/out listeners
+
+  // Handle Delete Timesheet Entry
+  elements.editTsDeleteBtn.addEventListener('click', async () => {
+    if (!editingTimesheet || !editingTimesheet.id) return;
     
-    // Create new timesheet if one doesn't exist
-    if (!todayTimesheet) {
-      const newEntry = {
-        date: dateStr,
-        clockIn: Date.now(),
-        lunchStart: null,
-        lunchEnd: null,
-        lunchDuration: 0,
-        clockOut: null,
-        notes: ''
-      };
-      await window.AppDB.createTimesheet(newEntry);
-    } else {
-      // Re-clock in / override existing
-      todayTimesheet.clockIn = Date.now();
-      todayTimesheet.clockOut = null;
-      await window.AppDB.updateTimesheet(todayTimesheet);
+    if (confirm('Are you sure you want to delete this timesheet entry? This action cannot be undone.')) {
+      try {
+        await window.AppDB.deleteTimesheet(editingTimesheet.id);
+        closeAllModals();
+        await refreshTimesheet();
+      } catch (err) {
+        console.error('Failed to delete timesheet:', err);
+        alert('Error deleting timesheet.');
+      }
     }
-    
-    await refreshTimesheet();
-  });
-
-  // Lunch Toggle Action
-  elements.tsLunchBtn.addEventListener('click', async () => {
-    if (!todayTimesheet) return;
-
-    if (!todayTimesheet.lunchStart) {
-      // Start Lunch
-      todayTimesheet.lunchStart = Date.now();
-    } else {
-      // End Lunch - Calculate elapsed lunch minutes
-      const elapsedMs = Date.now() - todayTimesheet.lunchStart;
-      todayTimesheet.lunchDuration += Math.floor(elapsedMs / 60000);
-      todayTimesheet.lunchStart = null;
-    }
-
-    await window.AppDB.updateTimesheet(todayTimesheet);
-    await refreshTimesheet();
-  });
-
-  // Clock Out Action
-  elements.tsClockOutBtn.addEventListener('click', async () => {
-    if (!todayTimesheet) return;
-
-    // Auto-calculate final lunch if clocked out on lunch
-    if (todayTimesheet.lunchStart) {
-      const elapsedMs = Date.now() - todayTimesheet.lunchStart;
-      todayTimesheet.lunchDuration += Math.floor(elapsedMs / 60000);
-      todayTimesheet.lunchStart = null;
-    }
-
-    todayTimesheet.clockOut = Date.now();
-    
-    const workNotes = prompt('Describe work performed today (optional):');
-    if (workNotes !== null) {
-      todayTimesheet.notes = workNotes.trim();
-    }
-
-    await window.AppDB.updateTimesheet(todayTimesheet);
-    await refreshTimesheet();
   });
 
   // Submit Edit Timesheet Entry Form
@@ -417,13 +378,13 @@ function setupEventListeners() {
     e.preventDefault();
     if (!editingTimesheet) return;
 
+    const dateStr = elements.editTsDate.value;
     const inTimeStr = elements.editTsClockIn.value; // "HH:MM"
     const outTimeStr = elements.editTsClockOut.value; // "HH:MM" or ""
     const lunchMins = parseInt(elements.editTsLunchDuration.value, 10);
     const notesStr = elements.editTsNotes.value.trim();
 
-    // Construct timestamps using local Date parser helper
-    const dateStr = editingTimesheet.date;
+    editingTimesheet.date = dateStr;
     editingTimesheet.clockIn = new Date(`${dateStr}T${inTimeStr}`).getTime();
     
     if (outTimeStr) {
@@ -436,13 +397,62 @@ function setupEventListeners() {
     editingTimesheet.notes = notesStr;
 
     try {
-      await window.AppDB.updateTimesheet(editingTimesheet);
+      if (editingTimesheet.id) {
+        await window.AppDB.updateTimesheet(editingTimesheet);
+      } else {
+        // Check if an entry for this date already exists
+        const existing = await window.AppDB.getTimesheetByDate(dateStr);
+        if (existing) {
+          alert(`An entry for ${dateStr} already exists. Please edit the existing entry.`);
+          return;
+        }
+        await window.AppDB.createTimesheet(editingTimesheet);
+      }
       closeAllModals();
       await refreshTimesheet();
     } catch (err) {
       console.error('Failed to update timesheet:', err);
       alert('Error updating timesheet log.');
     }
+  });
+
+  // Open Add Manual Entry Modal
+  elements.tsAddManualBtn.addEventListener('click', () => {
+    openNewTimesheetModal();
+  });
+
+  // Open Print Options Modal
+  elements.tsPrintBtn.addEventListener('click', () => {
+    // Populate stored defaults
+    elements.optEmpName.value = localStorage.getItem('ts_print_emp_name') || 'Brad Rappa';
+    elements.optDept.value = localStorage.getItem('ts_print_dept') || 'Field Service';
+    elements.optSupervisor.value = localStorage.getItem('ts_print_supervisor') || '';
+    
+    // Set week ending default to next Saturday
+    const nextSaturday = getThisSaturdaysDate();
+    const year = nextSaturday.getFullYear();
+    const month = String(nextSaturday.getMonth() + 1).padStart(2, '0');
+    const day = String(nextSaturday.getDate()).padStart(2, '0');
+    elements.optWeekEnding.value = `${year}-${month}-${day}`;
+    
+    openModal(elements.printOptionsModal);
+  });
+
+  // Handle Print Form Submission
+  elements.printOptionsForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const empName = elements.optEmpName.value.trim();
+    const dept = elements.optDept.value.trim();
+    const supervisor = elements.optSupervisor.value.trim();
+    const weekEndingStr = elements.optWeekEnding.value; // YYYY-MM-DD
+    
+    // Save to localStorage as defaults
+    localStorage.setItem('ts_print_emp_name', empName);
+    localStorage.setItem('ts_print_dept', dept);
+    localStorage.setItem('ts_print_supervisor', supervisor);
+    
+    generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr);
   });
 }
 
@@ -565,16 +575,21 @@ function closeAllModals() {
   }
   
   // If editing, save timer state
-  if (selectedTicket) {
+  if (selectedTicket && elements.detailModal.classList.contains('active')) {
     // If timer was running, update database to store current state
     window.AppDB.updateTicket(selectedTicket).then(() => {
       selectedTicket = null;
       refreshApp();
-    });
+    }).catch(console.error);
+  } else {
+    selectedTicket = null;
   }
 
   elements.newTicketModal.classList.remove('active');
   elements.detailModal.classList.remove('active');
+  elements.editTimesheetModal.classList.remove('active');
+  elements.printOptionsModal.classList.remove('active');
+  editingTimesheet = null;
 }
 
 // Open Detail View Modal
@@ -804,7 +819,7 @@ function switchView(viewName) {
     elements.ticketList.style.display = 'flex';
     elements.newTicketFab.style.display = 'flex';
     elements.searchInput.parentElement.style.display = 'block'; // Search bar
-    elements.filterTabs.style.display = 'flex'; // Tickets filter tabs
+    elements.filterTabsContainer.style.display = 'flex'; // Tickets filter tabs container
     
     // Hide Timesheets
     elements.timesheetSection.style.display = 'none';
@@ -816,7 +831,7 @@ function switchView(viewName) {
     elements.ticketList.style.display = 'none';
     elements.newTicketFab.style.display = 'none';
     elements.searchInput.parentElement.style.display = 'none';
-    elements.filterTabs.style.display = 'none';
+    elements.filterTabsContainer.style.display = 'none';
     
     // Show Timesheets
     elements.timesheetSection.style.display = 'flex';
@@ -832,108 +847,7 @@ async function refreshTimesheet() {
   todayTimesheet = await window.AppDB.getTimesheetByDate(dateStr);
   allTimesheets = await window.AppDB.getAllTimesheets();
   
-  // Render Current Date Heading (Readable format)
-  const todayDateObj = new Date();
-  elements.tsDateDisplay.textContent = todayDateObj.toLocaleDateString(undefined, { 
-    weekday: 'long', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-  
-  updateTimesheetStatusUI();
   renderTimesheetHistory();
-}
-
-// Update Active Card banner status and buttons
-function updateTimesheetStatusUI() {
-  const banner = elements.timesheetSection.querySelector('.timesheet-card');
-  banner.className = 'timesheet-card'; // Reset classes
-  
-  if (!todayTimesheet || (!todayTimesheet.clockIn && !todayTimesheet.clockOut)) {
-    // State: Clocked Out
-    elements.tsStatusText.textContent = 'Clocked Out';
-    banner.classList.add('ts-clockedout');
-    
-    elements.tsClockInBtn.disabled = false;
-    elements.tsLunchBtn.disabled = true;
-    elements.tsLunchBtn.textContent = 'Start Lunch';
-    elements.tsClockOutBtn.disabled = true;
-  } else if (todayTimesheet.clockOut) {
-    // State: Clocked Out for today
-    elements.tsStatusText.textContent = 'Clocked Out';
-    banner.classList.add('ts-clockedout');
-    
-    elements.tsClockInBtn.disabled = false; // Allow re-clocking in if needed
-    elements.tsClockInBtn.textContent = 'Clock In Again';
-    elements.tsLunchBtn.disabled = true;
-    elements.tsLunchBtn.textContent = 'Start Lunch';
-    elements.tsClockOutBtn.disabled = true;
-  } else if (todayTimesheet.lunchStart) {
-    // State: On Lunch
-    elements.tsStatusText.textContent = 'On Lunch';
-    banner.classList.add('ts-lunch');
-    
-    elements.tsClockInBtn.disabled = true;
-    elements.tsLunchBtn.disabled = false;
-    elements.tsLunchBtn.textContent = 'End Lunch';
-    elements.tsClockOutBtn.disabled = false; // Allow clock out direct from lunch
-  } else {
-    // State: Clocked In & Working
-    elements.tsStatusText.textContent = 'Working';
-    banner.classList.add('ts-working');
-    
-    elements.tsClockInBtn.disabled = true;
-    elements.tsLunchBtn.disabled = false;
-    elements.tsLunchBtn.textContent = 'Start Lunch';
-    elements.tsClockOutBtn.disabled = false;
-  }
-  
-  updateTimesheetTimerDisplay();
-}
-
-// Update live working timer display in timesheet card
-function updateTimesheetTimerDisplay() {
-  if (!todayTimesheet || !todayTimesheet.clockIn) {
-    elements.tsWorkingTimeDisplay.textContent = '0h 00m';
-    elements.tsLunchDisplay.textContent = 'Lunch: 0m';
-    return;
-  }
-
-  let totalWorkMs = 0;
-  let lunchMinutes = todayTimesheet.lunchDuration;
-  
-  // Calculate Lunch
-  if (todayTimesheet.lunchStart) {
-    const activeLunchMs = Date.now() - todayTimesheet.lunchStart;
-    lunchMinutes += Math.floor(activeLunchMs / 60000);
-  }
-  elements.tsLunchDisplay.textContent = `Lunch: ${lunchMinutes}m`;
-
-  // Calculate Net Work duration
-  if (todayTimesheet.clockOut) {
-    totalWorkMs = (todayTimesheet.clockOut - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
-  } else if (todayTimesheet.lunchStart) {
-    // Frozen working duration at lunch start moment
-    totalWorkMs = (todayTimesheet.lunchStart - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
-  } else {
-    // Actively working
-    totalWorkMs = (Date.now() - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
-  }
-
-  // Format net work duration as "Xh YYm"
-  const totalWorkMins = Math.max(0, Math.floor(totalWorkMs / 60000));
-  const hrs = Math.floor(totalWorkMins / 60);
-  const mins = totalWorkMins % 60;
-  elements.tsWorkingTimeDisplay.textContent = `${hrs}h ${String(mins).padStart(2, '0')}m`;
-}
-
-// Loop ticker for live timesheet calculations
-function startGlobalTimesheetWatcher() {
-  setInterval(() => {
-    if (currentView === 'timesheet') {
-      updateTimesheetTimerDisplay();
-    }
-  }, 1000);
 }
 
 // Render historical timesheet rows
@@ -1012,6 +926,22 @@ function openEditTimesheetModal(ts) {
   elements.editTsClockOut.value = editingTimesheet.clockOut ? formatTimeInput(new Date(editingTimesheet.clockOut)) : '';
   elements.editTsNotes.value = editingTimesheet.notes || '';
   
+  elements.editTsDeleteBtn.style.display = 'block';
+  openModal(elements.editTimesheetModal);
+}
+
+// Open modal for creating a manual timesheet entry
+function openNewTimesheetModal() {
+  editingTimesheet = {}; // Empty indicates new
+  
+  elements.editTsId.value = '';
+  elements.editTsDate.value = getLocalDateStr();
+  elements.editTsClockIn.value = '08:00';
+  elements.editTsLunchDuration.value = 30;
+  elements.editTsClockOut.value = '';
+  elements.editTsNotes.value = '';
+  
+  elements.editTsDeleteBtn.style.display = 'none';
   openModal(elements.editTimesheetModal);
 }
 
@@ -1059,4 +989,108 @@ function getThisMondaysDate() {
   const diff = today.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(today.setDate(diff));
 }
+
+// Get the Sunday of this week (for Week Ending Date default)
+function getThisSaturdaysDate() {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const day = today.getDay();
+  // Adjust so Saturday is day 6, if today is Sunday (0), next Saturday is in 6 days
+  const diff = today.getDate() + (day === 6 ? 0 : 6 - day);
+  return new Date(today.setDate(diff));
+}
+
+// Generate the printable timesheet HTML and trigger print dialog
+function generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr) {
+  // Parse Week Ending Date robustly using local components
+  const [y, m, d] = weekEndingStr.split('-').map(Number);
+  const weekEndDate = new Date(y, m - 1, d); // Midnight local time
+  
+  // Start date of week is 6 days prior (Sunday)
+  const weekStartDate = new Date(y, m - 1, d - 6);
+  
+  // Format Date Range bounds
+  const formatYMD = (dateObj) => {
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const weekStartStr = formatYMD(weekStartDate);
+  const weekEndStr = formatYMD(weekEndDate);
+  
+  // Populating static fields
+  elements.printEmpName.textContent = empName;
+  elements.printSupervisor.textContent = supervisor || '--';
+  elements.printWeekEnding.textContent = weekEndDate.toLocaleDateString(undefined, { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  // Populate Rows for all 7 days of the week (Sunday to Saturday)
+  elements.printTableBody.innerHTML = '';
+  let totalWeeklyMins = 0;
+  
+  for (let i = 0; i < 7; i++) {
+    const currentDate = new Date(weekStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+    const dateYMD = formatYMD(currentDate);
+    
+    // Find timesheet record for this date
+    const record = allTimesheets.find(ts => ts.date === dateYMD);
+    
+    const formattedDate = currentDate.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }).replace(',', '');
+    const formattedDay = currentDate.toLocaleDateString(undefined, { weekday: 'long' });
+    
+    let clockIn = '';
+    let mealBreakFormatted = '';
+    let clockOut = '';
+    let netHoursDecimal = '';
+    let notes = '';
+    
+    if (record) {
+      clockIn = record.clockIn ? formatTime(new Date(record.clockIn)) : '';
+      
+      if (record.lunchStart) {
+        mealBreakFormatted = 'On Break';
+      } else if (record.lunchDuration > 0) {
+        // Format to decimal hours for the scan
+        const mealDecimal = (record.lunchDuration / 60).toFixed(1);
+        mealBreakFormatted = mealDecimal === '0.5' ? '.5' : mealDecimal;
+      }
+      
+      clockOut = record.clockOut ? formatTime(new Date(record.clockOut)) : '';
+      
+      const dayMins = calculateTimesheetMinutes(record);
+      totalWeeklyMins += dayMins;
+      netHoursDecimal = dayMins > 0 ? (dayMins / 60).toFixed(2) : '';
+      notes = record.notes || '';
+    }
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td style="border: 1px solid #000; padding: 6px; text-align: left; text-transform: uppercase;">${formattedDay}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: center;">${formattedDate}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: center;">${clockIn}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: center;">${clockOut}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: center;">${mealBreakFormatted}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold;">${netHoursDecimal}</td>
+      <td style="border: 1px solid #000; padding: 6px; text-align: left; font-size: 9pt;">${escapeHTML(notes)}</td>
+    `;
+    elements.printTableBody.appendChild(row);
+  }
+  
+  // Set Total hours
+  const totalWeeklyHrs = (totalWeeklyMins / 60).toFixed(2);
+  elements.printTotalHours.textContent = totalWeeklyHrs;
+  
+  // Close Options Modal
+  closeAllModals();
+  
+  // Trigger Print dialog
+  setTimeout(() => {
+    window.print();
+  }, 300);
+}
+
 
