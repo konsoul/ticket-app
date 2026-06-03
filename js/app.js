@@ -51,10 +51,8 @@ const elements = {
   newNoteText: document.getElementById('newNoteText'),
   notesTimeline: document.getElementById('notesTimeline'),
   
-  // Backup / Restore
-  exportBtn: document.getElementById('exportBtn'),
-  importBtn: document.getElementById('importBtn'),
-  importFile: document.getElementById('importFile'),
+  // User Management
+  logoutBtn: document.getElementById('logoutBtn'),
 
   // --- Timesheet Elements ---
   viewTicketsTab: document.getElementById('viewTicketsTab'),
@@ -92,25 +90,81 @@ const elements = {
   printWeekEnding: document.getElementById('printWeekEnding'),
   printSupervisor: document.getElementById('printSupervisor'),
   printTableBody: document.getElementById('printTableBody'),
-  printTotalHours: document.getElementById('printTotalHours')
+  printTotalHours: document.getElementById('printTotalHours'),
+
+  // Auth Elements
+  authModal: document.getElementById('authModal'),
+  authForm: document.getElementById('authForm'),
+  authEmail: document.getElementById('authEmail'),
+  authPassword: document.getElementById('authPassword'),
+  authErrorMsg: document.getElementById('authErrorMsg')
 };
 
+let isAppInitialized = false;
+
 // Initialize Application
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    await window.AppDB.getAllTickets(); // Warm up IndexedDB
-    await refreshApp();
-    await refreshTimesheet(); // Warm up timesheet views
-    setupEventListeners();
-    startGlobalTimersWatcher(); // Watch for running timers in lists
-  } catch (error) {
-    console.error('Failed to initialize App:', error);
-    alert('Failed to initialize local database. Please refresh.');
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  setupEventListeners(); // Attach UI events
+
+  window.AppDB.onAuthStateChanged(async (user) => {
+    if (user) {
+      if (elements.authModal) closeAllModals();
+      if (elements.logoutBtn) elements.logoutBtn.style.display = 'inline-flex';
+      
+      if (!isAppInitialized) {
+        isAppInitialized = true;
+        try {
+          await refreshApp();
+          await refreshTimesheet();
+          startGlobalTimersWatcher();
+        } catch (error) {
+          console.error('Failed to initialize App:', error);
+          alert('Error loading data. Please refresh.');
+        }
+      } else {
+        await refreshApp();
+        await refreshTimesheet();
+      }
+    } else {
+      isAppInitialized = false;
+      if (elements.logoutBtn) elements.logoutBtn.style.display = 'none';
+      if (elements.authModal) openModal(elements.authModal);
+    }
+  });
 });
 
 // Setup Events
 function setupEventListeners() {
+  // Auth Form Submission
+  if (elements.authForm) {
+    elements.authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      elements.authErrorMsg.style.display = 'none';
+      const email = elements.authEmail.value.trim();
+      const password = elements.authPassword.value;
+      const btn = document.getElementById('authSubmitBtn');
+      const originalText = btn.textContent;
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+      try {
+        await window.AppDB.login(email, password);
+      } catch (err) {
+        elements.authErrorMsg.textContent = err.message;
+        elements.authErrorMsg.style.display = 'block';
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    });
+  }
+
+  // Logout Button
+  if (elements.logoutBtn) {
+    elements.logoutBtn.addEventListener('click', async () => {
+      await window.AppDB.logout();
+    });
+  }
+
   // Modal toggle close buttons
   document.querySelectorAll('.modal-close-trigger').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -303,57 +357,6 @@ function setupEventListeners() {
     }
   });
 
-  // Export (Backup) Database
-  elements.exportBtn.addEventListener('click', async () => {
-    try {
-      const data = await window.AppDB.exportData();
-      const jsonStr = JSON.stringify(data, null, 2);
-      
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const tempLink = document.createElement('a');
-      tempLink.href = url;
-      tempLink.download = `field-tickets-backup-${dateStr}.json`;
-      document.body.appendChild(tempLink);
-      tempLink.click();
-      document.body.removeChild(tempLink);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export failed:', err);
-      alert('Failed to generate backup.');
-    }
-  });
-
-  // Import (Restore) Database
-  elements.importBtn.addEventListener('click', () => {
-    elements.importFile.click();
-  });
-
-  elements.importFile.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const parsed = JSON.parse(evt.target.result);
-        if (confirm('Warning: This will OVERWRITE all your current tickets. Proceed?')) {
-          await window.AppDB.importData(parsed);
-          alert('Database restored successfully.');
-          await refreshApp();
-          await refreshTimesheet();
-        }
-      } catch (err) {
-        console.error('Import error:', err);
-        alert('Invalid file format. Please import a valid backup JSON file.');
-      }
-      elements.importFile.value = ''; // Reset input
-    };
-    reader.readAsText(file);
-  });
-
   // --- Timesheet Event Handlers ---
   
   // Tab Navigation toggles
@@ -422,7 +425,7 @@ function setupEventListeners() {
       await refreshTimesheet();
     } catch (err) {
       console.error('Failed to update timesheet:', err);
-      alert('Error updating timesheet log.');
+      alert('Error updating timesheet log: ' + err.message);
     }
   });
 
