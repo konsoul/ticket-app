@@ -602,6 +602,7 @@ function closeAllModals() {
   elements.detailModal.classList.remove('active');
   elements.editTimesheetModal.classList.remove('active');
   elements.printOptionsModal.classList.remove('active');
+  if (elements.authModal) elements.authModal.classList.remove('active');
   editingTimesheet = null;
 }
 
