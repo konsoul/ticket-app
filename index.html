@@ -42,6 +42,12 @@
           </button>
         </div>
       </div>
+
+      <!-- App Navigation -->
+      <div class="app-navigation">
+        <button id="viewTicketsTab" class="nav-tab active">Tickets</button>
+        <button id="viewTimesheetTab" class="nav-tab">Timesheet</button>
+      </div>
       
       <!-- Search Input -->
       <div class="search-container">
@@ -69,6 +75,41 @@
         <p>Tap the "+" button below to create your first job ticket.</p>
       </div>
     </main>
+
+    <!-- Timesheet View Container -->
+    <section id="timesheetSection" class="timesheet-wrapper" style="display: none;">
+      <!-- Timesheet Main Card -->
+      <div class="timesheet-card">
+        <div class="timesheet-status-banner">
+          <div class="timesheet-status-label">Current State</div>
+          <div id="tsStatusText" class="timesheet-status-val">Clocked Out</div>
+        </div>
+        
+        <div class="timesheet-current-time">
+          <div id="tsDateDisplay">Wednesday, June 3</div>
+          <div id="tsWorkingTimeDisplay" class="timesheet-clock-time">0h 00m</div>
+          <div id="tsLunchDisplay" class="timesheet-lunch-subtext">Lunch: 0m</div>
+        </div>
+
+        <div class="timesheet-actions">
+          <button id="tsClockInBtn" class="btn btn-primary">Clock In</button>
+          <button id="tsLunchBtn" class="btn btn-secondary" disabled>Start Lunch</button>
+          <button id="tsClockOutBtn" class="btn btn-danger" disabled>Clock Out</button>
+        </div>
+      </div>
+
+      <!-- Weekly Total & History Section -->
+      <div class="timesheet-history-section">
+        <div class="timesheet-history-header">
+          <h3>Daily History</h3>
+          <span id="tsWeeklyTotal" class="weekly-total">Weekly Total: 0.0 hrs</span>
+        </div>
+        
+        <div id="tsHistoryList" class="timesheet-history-list">
+          <!-- Populated dynamically from app.js -->
+        </div>
+      </div>
+    </section>
 
     <!-- Floating Action Button for New Ticket -->
     <button id="newTicketFab" class="fab" aria-label="Create Ticket">
@@ -197,6 +238,47 @@
       <div class="modal-footer">
         <button id="saveDetailBtn" class="btn btn-primary" style="width: 100%;">Save Changes & Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT TIMESHEET ENTRY -->
+  <div id="editTimesheetModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Edit Timesheet</h2>
+        <button class="close-btn modal-close-trigger" aria-label="Close modal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="editTimesheetForm">
+        <div class="modal-body">
+          <input type="hidden" id="editTsId">
+          <div class="form-group">
+            <label for="editTsDate">Date</label>
+            <input type="date" id="editTsDate" class="form-control" readonly>
+          </div>
+          <div class="form-group">
+            <label for="editTsClockIn">Clock In Time</label>
+            <input type="time" id="editTsClockIn" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="editTsLunchDuration">Lunch Duration (minutes)</label>
+            <input type="number" id="editTsLunchDuration" class="form-control" min="0" required>
+          </div>
+          <div class="form-group">
+            <label for="editTsClockOut">Clock Out Time</label>
+            <input type="time" id="editTsClockOut" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="editTsNotes">Notes / Description</label>
+            <input type="text" id="editTsNotes" class="form-control" placeholder="What did you work on today?">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close-trigger">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Entry</button>
+        </div>
+      </form>
     </div>
   </div>
 

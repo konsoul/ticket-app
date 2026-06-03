@@ -9,6 +9,13 @@ let searchQuery = '';
 let selectedTicket = null;
 let activeTimerInterval = null;
 
+// Timesheet State
+let currentView = 'tickets'; // 'tickets' or 'timesheet'
+let todayTimesheet = null;
+let timesheetTimerInterval = null;
+let allTimesheets = [];
+let editingTimesheet = null;
+
 // DOM Elements
 const elements = {
   ticketList: document.getElementById('ticketList'),
@@ -47,17 +54,45 @@ const elements = {
   // Backup / Restore
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
-  importFile: document.getElementById('importFile')
+  importFile: document.getElementById('importFile'),
+
+  // --- Timesheet Elements ---
+  viewTicketsTab: document.getElementById('viewTicketsTab'),
+  viewTimesheetTab: document.getElementById('viewTimesheetTab'),
+  timesheetSection: document.getElementById('timesheetSection'),
+  
+  tsStatusText: document.getElementById('tsStatusText'),
+  tsDateDisplay: document.getElementById('tsDateDisplay'),
+  tsWorkingTimeDisplay: document.getElementById('tsWorkingTimeDisplay'),
+  tsLunchDisplay: document.getElementById('tsLunchDisplay'),
+  
+  tsClockInBtn: document.getElementById('tsClockInBtn'),
+  tsLunchBtn: document.getElementById('tsLunchBtn'),
+  tsClockOutBtn: document.getElementById('tsClockOutBtn'),
+  
+  tsWeeklyTotal: document.getElementById('tsWeeklyTotal'),
+  tsHistoryList: document.getElementById('tsHistoryList'),
+  
+  // Edit Timesheet Modal
+  editTimesheetModal: document.getElementById('editTimesheetModal'),
+  editTimesheetForm: document.getElementById('editTimesheetForm'),
+  editTsId: document.getElementById('editTsId'),
+  editTsDate: document.getElementById('editTsDate'),
+  editTsClockIn: document.getElementById('editTsClockIn'),
+  editTsLunchDuration: document.getElementById('editTsLunchDuration'),
+  editTsClockOut: document.getElementById('editTsClockOut'),
+  editTsNotes: document.getElementById('editTsNotes')
 };
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize db.js wrapper
   try {
     await window.AppDB.getAllTickets(); // Warm up IndexedDB
     await refreshApp();
+    await refreshTimesheet(); // Warm up timesheet views
     setupEventListeners();
     startGlobalTimersWatcher(); // Watch for running timers in lists
+    startGlobalTimesheetWatcher(); // Start live timesheet clock ticker
   } catch (error) {
     console.error('Failed to initialize App:', error);
     alert('Failed to initialize local database. Please refresh.');
@@ -289,6 +324,7 @@ function setupEventListeners() {
           await window.AppDB.importData(parsed);
           alert('Database restored successfully.');
           await refreshApp();
+          await refreshTimesheet();
         }
       } catch (err) {
         console.error('Import error:', err);
@@ -297,6 +333,116 @@ function setupEventListeners() {
       elements.importFile.value = ''; // Reset input
     };
     reader.readAsText(file);
+  });
+
+  // --- Timesheet Event Handlers ---
+  
+  // Tab Navigation toggles
+  elements.viewTicketsTab.addEventListener('click', () => {
+    switchView('tickets');
+  });
+
+  elements.viewTimesheetTab.addEventListener('click', () => {
+    switchView('timesheet');
+  });
+
+  // Clock In Action
+  elements.tsClockInBtn.addEventListener('click', async () => {
+    const dateStr = getLocalDateStr();
+    
+    // Create new timesheet if one doesn't exist
+    if (!todayTimesheet) {
+      const newEntry = {
+        date: dateStr,
+        clockIn: Date.now(),
+        lunchStart: null,
+        lunchEnd: null,
+        lunchDuration: 0,
+        clockOut: null,
+        notes: ''
+      };
+      await window.AppDB.createTimesheet(newEntry);
+    } else {
+      // Re-clock in / override existing
+      todayTimesheet.clockIn = Date.now();
+      todayTimesheet.clockOut = null;
+      await window.AppDB.updateTimesheet(todayTimesheet);
+    }
+    
+    await refreshTimesheet();
+  });
+
+  // Lunch Toggle Action
+  elements.tsLunchBtn.addEventListener('click', async () => {
+    if (!todayTimesheet) return;
+
+    if (!todayTimesheet.lunchStart) {
+      // Start Lunch
+      todayTimesheet.lunchStart = Date.now();
+    } else {
+      // End Lunch - Calculate elapsed lunch minutes
+      const elapsedMs = Date.now() - todayTimesheet.lunchStart;
+      todayTimesheet.lunchDuration += Math.floor(elapsedMs / 60000);
+      todayTimesheet.lunchStart = null;
+    }
+
+    await window.AppDB.updateTimesheet(todayTimesheet);
+    await refreshTimesheet();
+  });
+
+  // Clock Out Action
+  elements.tsClockOutBtn.addEventListener('click', async () => {
+    if (!todayTimesheet) return;
+
+    // Auto-calculate final lunch if clocked out on lunch
+    if (todayTimesheet.lunchStart) {
+      const elapsedMs = Date.now() - todayTimesheet.lunchStart;
+      todayTimesheet.lunchDuration += Math.floor(elapsedMs / 60000);
+      todayTimesheet.lunchStart = null;
+    }
+
+    todayTimesheet.clockOut = Date.now();
+    
+    const workNotes = prompt('Describe work performed today (optional):');
+    if (workNotes !== null) {
+      todayTimesheet.notes = workNotes.trim();
+    }
+
+    await window.AppDB.updateTimesheet(todayTimesheet);
+    await refreshTimesheet();
+  });
+
+  // Submit Edit Timesheet Entry Form
+  elements.editTimesheetForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!editingTimesheet) return;
+
+    const inTimeStr = elements.editTsClockIn.value; // "HH:MM"
+    const outTimeStr = elements.editTsClockOut.value; // "HH:MM" or ""
+    const lunchMins = parseInt(elements.editTsLunchDuration.value, 10);
+    const notesStr = elements.editTsNotes.value.trim();
+
+    // Construct timestamps using local Date parser helper
+    const dateStr = editingTimesheet.date;
+    editingTimesheet.clockIn = new Date(`${dateStr}T${inTimeStr}`).getTime();
+    
+    if (outTimeStr) {
+      editingTimesheet.clockOut = new Date(`${dateStr}T${outTimeStr}`).getTime();
+    } else {
+      editingTimesheet.clockOut = null;
+    }
+
+    editingTimesheet.lunchDuration = isNaN(lunchMins) ? 0 : Math.max(0, lunchMins);
+    editingTimesheet.notes = notesStr;
+
+    try {
+      await window.AppDB.updateTimesheet(editingTimesheet);
+      closeAllModals();
+      await refreshTimesheet();
+    } catch (err) {
+      console.error('Failed to update timesheet:', err);
+      alert('Error updating timesheet log.');
+    }
   });
 }
 
@@ -643,3 +789,274 @@ function escapeHTML(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// --- TIMESHEETS LOGIC & RENDERING ---
+
+// Switch view screen (Tickets vs Timesheets)
+function switchView(viewName) {
+  currentView = viewName;
+  
+  if (viewName === 'tickets') {
+    elements.viewTicketsTab.classList.add('active');
+    elements.viewTimesheetTab.classList.remove('active');
+    
+    // Show tickets elements
+    elements.ticketList.style.display = 'flex';
+    elements.newTicketFab.style.display = 'flex';
+    elements.searchInput.parentElement.style.display = 'block'; // Search bar
+    elements.filterTabs.style.display = 'flex'; // Tickets filter tabs
+    
+    // Hide Timesheets
+    elements.timesheetSection.style.display = 'none';
+  } else {
+    elements.viewTicketsTab.classList.remove('active');
+    elements.viewTimesheetTab.classList.add('active');
+    
+    // Hide tickets elements
+    elements.ticketList.style.display = 'none';
+    elements.newTicketFab.style.display = 'none';
+    elements.searchInput.parentElement.style.display = 'none';
+    elements.filterTabs.style.display = 'none';
+    
+    // Show Timesheets
+    elements.timesheetSection.style.display = 'flex';
+    refreshTimesheet();
+  }
+}
+
+// Refresh daily timesheet card state and past history list
+async function refreshTimesheet() {
+  const dateStr = getLocalDateStr();
+  
+  // Fetch today's entry
+  todayTimesheet = await window.AppDB.getTimesheetByDate(dateStr);
+  allTimesheets = await window.AppDB.getAllTimesheets();
+  
+  // Render Current Date Heading (Readable format)
+  const todayDateObj = new Date();
+  elements.tsDateDisplay.textContent = todayDateObj.toLocaleDateString(undefined, { 
+    weekday: 'long', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+  
+  updateTimesheetStatusUI();
+  renderTimesheetHistory();
+}
+
+// Update Active Card banner status and buttons
+function updateTimesheetStatusUI() {
+  const banner = elements.timesheetSection.querySelector('.timesheet-card');
+  banner.className = 'timesheet-card'; // Reset classes
+  
+  if (!todayTimesheet || (!todayTimesheet.clockIn && !todayTimesheet.clockOut)) {
+    // State: Clocked Out
+    elements.tsStatusText.textContent = 'Clocked Out';
+    banner.classList.add('ts-clockedout');
+    
+    elements.tsClockInBtn.disabled = false;
+    elements.tsLunchBtn.disabled = true;
+    elements.tsLunchBtn.textContent = 'Start Lunch';
+    elements.tsClockOutBtn.disabled = true;
+  } else if (todayTimesheet.clockOut) {
+    // State: Clocked Out for today
+    elements.tsStatusText.textContent = 'Clocked Out';
+    banner.classList.add('ts-clockedout');
+    
+    elements.tsClockInBtn.disabled = false; // Allow re-clocking in if needed
+    elements.tsClockInBtn.textContent = 'Clock In Again';
+    elements.tsLunchBtn.disabled = true;
+    elements.tsLunchBtn.textContent = 'Start Lunch';
+    elements.tsClockOutBtn.disabled = true;
+  } else if (todayTimesheet.lunchStart) {
+    // State: On Lunch
+    elements.tsStatusText.textContent = 'On Lunch';
+    banner.classList.add('ts-lunch');
+    
+    elements.tsClockInBtn.disabled = true;
+    elements.tsLunchBtn.disabled = false;
+    elements.tsLunchBtn.textContent = 'End Lunch';
+    elements.tsClockOutBtn.disabled = false; // Allow clock out direct from lunch
+  } else {
+    // State: Clocked In & Working
+    elements.tsStatusText.textContent = 'Working';
+    banner.classList.add('ts-working');
+    
+    elements.tsClockInBtn.disabled = true;
+    elements.tsLunchBtn.disabled = false;
+    elements.tsLunchBtn.textContent = 'Start Lunch';
+    elements.tsClockOutBtn.disabled = false;
+  }
+  
+  updateTimesheetTimerDisplay();
+}
+
+// Update live working timer display in timesheet card
+function updateTimesheetTimerDisplay() {
+  if (!todayTimesheet || !todayTimesheet.clockIn) {
+    elements.tsWorkingTimeDisplay.textContent = '0h 00m';
+    elements.tsLunchDisplay.textContent = 'Lunch: 0m';
+    return;
+  }
+
+  let totalWorkMs = 0;
+  let lunchMinutes = todayTimesheet.lunchDuration;
+  
+  // Calculate Lunch
+  if (todayTimesheet.lunchStart) {
+    const activeLunchMs = Date.now() - todayTimesheet.lunchStart;
+    lunchMinutes += Math.floor(activeLunchMs / 60000);
+  }
+  elements.tsLunchDisplay.textContent = `Lunch: ${lunchMinutes}m`;
+
+  // Calculate Net Work duration
+  if (todayTimesheet.clockOut) {
+    totalWorkMs = (todayTimesheet.clockOut - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
+  } else if (todayTimesheet.lunchStart) {
+    // Frozen working duration at lunch start moment
+    totalWorkMs = (todayTimesheet.lunchStart - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
+  } else {
+    // Actively working
+    totalWorkMs = (Date.now() - todayTimesheet.clockIn) - (todayTimesheet.lunchDuration * 60000);
+  }
+
+  // Format net work duration as "Xh YYm"
+  const totalWorkMins = Math.max(0, Math.floor(totalWorkMs / 60000));
+  const hrs = Math.floor(totalWorkMins / 60);
+  const mins = totalWorkMins % 60;
+  elements.tsWorkingTimeDisplay.textContent = `${hrs}h ${String(mins).padStart(2, '0')}m`;
+}
+
+// Loop ticker for live timesheet calculations
+function startGlobalTimesheetWatcher() {
+  setInterval(() => {
+    if (currentView === 'timesheet') {
+      updateTimesheetTimerDisplay();
+    }
+  }, 1000);
+}
+
+// Render historical timesheet rows
+function renderTimesheetHistory() {
+  elements.tsHistoryList.innerHTML = '';
+  
+  if (allTimesheets.length === 0) {
+    elements.tsHistoryList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">No timesheet history found.</div>';
+    elements.tsWeeklyTotal.textContent = 'Weekly Total: 0.0 hrs';
+    return;
+  }
+
+  // Calculate weekly total (Current Calendar Week: Monday - Sunday)
+  const monday = getThisMondaysDate();
+  let weeklyMinutes = 0;
+
+  allTimesheets.forEach(ts => {
+    const itemDate = new Date(ts.date + 'T00:00:00'); // Parse in local context
+    
+    // Sum for week total if record is on/after Monday
+    if (itemDate >= monday) {
+      const mins = calculateTimesheetMinutes(ts);
+      weeklyMinutes += mins;
+    }
+
+    // Render Row card
+    const card = document.createElement('div');
+    card.className = 'history-item fade-in';
+
+    const cleanDateFormatted = itemDate.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+
+    const displayClockIn = ts.clockIn ? formatTime(new Date(ts.clockIn)) : '--:--';
+    const displayClockOut = ts.clockOut ? formatTime(new Date(ts.clockOut)) : 'Working';
+    const totalMins = calculateTimesheetMinutes(ts);
+    const decimalHrs = (totalMins / 60).toFixed(2);
+
+    card.innerHTML = `
+      <div class="history-left">
+        <div class="history-date">${cleanDateFormatted}</div>
+        <div class="history-times">${displayClockIn} - ${displayClockOut} | Lunch: ${ts.lunchDuration}m</div>
+        ${ts.notes ? `<div class="history-notes" title="${escapeHTML(ts.notes)}">${escapeHTML(ts.notes)}</div>` : ''}
+      </div>
+      <div class="history-right">
+        <div class="history-hours">${decimalHrs} hrs</div>
+        <button class="history-edit-btn" data-ts-id="${ts.id}" aria-label="Edit timesheet entry">
+          <!-- Pencil Edit Icon -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
+      </div>
+    `;
+
+    // Click handler for editing row
+    card.querySelector('.history-edit-btn').addEventListener('click', () => {
+      openEditTimesheetModal(ts);
+    });
+
+    elements.tsHistoryList.appendChild(card);
+  });
+
+  const weeklyHours = (weeklyMinutes / 60).toFixed(1);
+  elements.tsWeeklyTotal.textContent = `Weekly Total: ${weeklyHours} hrs`;
+}
+
+// Open modal for updating timesheet details
+function openEditTimesheetModal(ts) {
+  editingTimesheet = { ...ts };
+  
+  elements.editTsId.value = editingTimesheet.id;
+  elements.editTsDate.value = editingTimesheet.date;
+  elements.editTsClockIn.value = editingTimesheet.clockIn ? formatTimeInput(new Date(editingTimesheet.clockIn)) : '08:00';
+  elements.editTsLunchDuration.value = editingTimesheet.lunchDuration;
+  elements.editTsClockOut.value = editingTimesheet.clockOut ? formatTimeInput(new Date(editingTimesheet.clockOut)) : '';
+  elements.editTsNotes.value = editingTimesheet.notes || '';
+  
+  openModal(elements.editTimesheetModal);
+}
+
+// --- HELPER UTILITIES ---
+
+// Get local date string YYYY-MM-DD
+function getLocalDateStr() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Format Date object to HH:MM AM/PM standard
+function formatTime(dateObj) {
+  return dateObj.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+// Format Date object to "HH:MM" 24-hour style for inputs
+function formatTimeInput(dateObj) {
+  const hrs = String(dateObj.getHours()).padStart(2, '0');
+  const mins = String(dateObj.getMinutes()).padStart(2, '0');
+  return `${hrs}:${mins}`;
+}
+
+// Calculate Net timesheet minutes
+function calculateTimesheetMinutes(ts) {
+  if (!ts.clockIn) return 0;
+  const endTimestamp = ts.clockOut || Date.now();
+  const rawMins = Math.floor((endTimestamp - ts.clockIn) / 60000);
+  return Math.max(0, rawMins - ts.lunchDuration);
+}
+
+// Get the Monday of this week (for weekly calculations)
+function getThisMondaysDate() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const day = today.getDay();
+  // Adjust so Monday is day 1, Sunday is day 7
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(today.setDate(diff));
+}
+

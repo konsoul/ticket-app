@@ -4,13 +4,13 @@
  */
 
 const DB_NAME = 'FieldServiceTicketingDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance = null;
 
 /**
  * Initializes and opens the IndexedDB database.
- * Creates the "tickets" and "notes" object stores if they don't exist.
+ * Creates the "tickets", "notes", and "timesheets" object stores.
  */
 function initDB() {
   return new Promise((resolve, reject) => {
@@ -45,6 +45,12 @@ function initDB() {
         const notesStore = db.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
         notesStore.createIndex('ticketId', 'ticketId', { unique: false });
         notesStore.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+
+      // Create timesheets store (Version 2)
+      if (!db.objectStoreNames.contains('timesheets')) {
+        const tsStore = db.createObjectStore('timesheets', { keyPath: 'id', autoIncrement: true });
+        tsStore.createIndex('date', 'date', { unique: true });
       }
     };
   });
@@ -236,17 +242,137 @@ const db = {
     });
   },
 
+  // --- TIMESHEETS ---
+
+  /**
+   * Creates a new timesheet daily entry.
+   * @param {Object} tsData 
+   */
+  async createTimesheet(tsData) {
+    const newTs = {
+      date: tsData.date || new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+      clockIn: tsData.clockIn || null,
+      lunchStart: tsData.lunchStart || null,
+      lunchEnd: tsData.lunchEnd || null,
+      lunchDuration: tsData.lunchDuration || 0, // in minutes
+      clockOut: tsData.clockOut || null,
+      notes: tsData.notes || '',
+      ...tsData
+    };
+
+    return runTransaction('timesheets', 'readwrite', (store) => {
+      const request = store.add(newTs);
+      return new Promise((resolve, reject) => {
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  /**
+   * Retrieves a timesheet entry by ID.
+   * @param {number} id 
+   */
+  async getTimesheet(id) {
+    return runTransaction('timesheets', 'readonly', (store) => {
+      const request = store.get(Number(id));
+      return new Promise((resolve, reject) => {
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  /**
+   * Retrieves a timesheet entry by its YYYY-MM-DD date.
+   * @param {string} dateStr 
+   */
+  async getTimesheetByDate(dateStr) {
+    return runTransaction('timesheets', 'readonly', (store) => {
+      const index = store.index('date');
+      const request = index.get(dateStr);
+      return new Promise((resolve, reject) => {
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  /**
+   * Retrieves all timesheets, sorted newest first.
+   */
+  async getAllTimesheets() {
+    return runTransaction('timesheets', 'readonly', (store) => {
+      const request = store.openCursor(null, 'prev');
+      const list = [];
+      return new Promise((resolve, reject) => {
+        request.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            list.push(cursor.value);
+            cursor.continue();
+          } else {
+            resolve(list);
+          }
+        };
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  /**
+   * Updates an existing timesheet entry.
+   * @param {Object} ts 
+   */
+  async updateTimesheet(ts) {
+    if (!ts.id) throw new Error('Timesheet ID is required for update');
+    
+    return runTransaction('timesheets', 'readwrite', (store) => {
+      const request = store.put(ts);
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(ts);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  /**
+   * Deletes a timesheet entry.
+   * @param {number} id 
+   */
+  async deleteTimesheet(id) {
+    return runTransaction('timesheets', 'readwrite', (store) => {
+      const request = store.delete(Number(id));
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+      });
+    });
+  },
+
+  // --- BACKUP & RESTORE ---
+
   /**
    * Backup all database records to a serializable object.
    */
   async exportData() {
     const tickets = await this.getAllTickets();
     
-    // Retrieve notes for all tickets
     const db = await initDB();
+    
+    // Retrieve notes for all tickets
     const notesList = await new Promise((resolve, reject) => {
       const transaction = db.transaction('notes', 'readonly');
       const store = transaction.objectStore('notes');
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    // Retrieve timesheets
+    const timesheetsList = await new Promise((resolve, reject) => {
+      const transaction = db.transaction('timesheets', 'readonly');
+      const store = transaction.objectStore('timesheets');
       const request = store.getAll();
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -256,13 +382,14 @@ const db = {
       version: DB_VERSION,
       exportDate: Date.now(),
       tickets: tickets,
-      notes: notesList
+      notes: notesList,
+      timesheets: timesheetsList
     };
   },
 
   /**
    * Restore database from imported JSON data.
-   * @param {Object} data - Exported data containing tickets and notes
+   * @param {Object} data - Exported data
    */
   async importData(data) {
     if (!data || !Array.isArray(data.tickets) || !Array.isArray(data.notes)) {
@@ -273,26 +400,34 @@ const db = {
     
     // Clear existing data
     await new Promise((resolve, reject) => {
-      const transaction = db.transaction(['tickets', 'notes'], 'readwrite');
+      const transaction = db.transaction(['tickets', 'notes', 'timesheets'], 'readwrite');
       transaction.objectStore('tickets').clear();
       transaction.objectStore('notes').clear();
+      transaction.objectStore('timesheets').clear();
       transaction.oncomplete = () => resolve();
       transaction.onerror = (e) => reject(e.target.error);
     });
 
     // Populate data
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['tickets', 'notes'], 'readwrite');
+      const transaction = db.transaction(['tickets', 'notes', 'timesheets'], 'readwrite');
       
       const ticketStore = transaction.objectStore('tickets');
       data.tickets.forEach(ticket => {
-        ticketStore.put(ticket); // put preserves key if it exists
+        ticketStore.put(ticket);
       });
 
       const noteStore = transaction.objectStore('notes');
       data.notes.forEach(note => {
         noteStore.put(note);
       });
+
+      const timesheetStore = transaction.objectStore('timesheets');
+      if (Array.isArray(data.timesheets)) {
+        data.timesheets.forEach(ts => {
+          timesheetStore.put(ts);
+        });
+      }
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = (e) => reject(e.target.error);

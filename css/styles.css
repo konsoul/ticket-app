@@ -827,3 +827,258 @@ textarea.form-control {
     padding: 0;
   }
 }
+
+/* App Navigation Tabs */
+.app-navigation {
+  display: flex;
+  background: hsl(var(--bg-surface));
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.nav-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: hsl(var(--text-secondary));
+  padding: 10px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: calc(var(--radius-sm) - 2px);
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.nav-tab:hover {
+  color: #fff;
+}
+
+.nav-tab.active {
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+/* Timesheet Section */
+.timesheet-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 20px 100px;
+}
+
+.timesheet-card {
+  background: hsl(var(--bg-card));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.timesheet-status-banner {
+  background: hsl(var(--bg-input));
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--glass-border);
+}
+
+.timesheet-status-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: hsl(var(--text-secondary));
+  letter-spacing: 0.5px;
+}
+
+.timesheet-status-val {
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  color: #fff;
+  background: hsl(var(--text-muted) / 0.15);
+  border: 1px solid hsl(var(--text-muted) / 0.3);
+}
+
+/* Status colors in banner */
+.ts-working .timesheet-status-val {
+  color: hsl(var(--status-open-hue) 100% 60%);
+  background: hsl(var(--status-open-hue) 100% 50% / 0.15);
+  border-color: hsl(var(--status-open-hue) 100% 50% / 0.30);
+}
+
+.ts-lunch .timesheet-status-val {
+  color: hsl(var(--status-pending-hue) 100% 65%);
+  background: hsl(var(--status-pending-hue) 100% 65% / 0.15);
+  border-color: hsl(var(--status-pending-hue) 100% 65% / 0.30);
+}
+
+.ts-clockedout .timesheet-status-val {
+  color: hsl(var(--text-muted));
+  background: hsl(var(--bg-input));
+  border-color: var(--glass-border);
+}
+
+.timesheet-current-time {
+  margin-bottom: 24px;
+}
+
+.timesheet-current-time #tsDateDisplay {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--text-secondary));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.timesheet-clock-time {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.timesheet-lunch-subtext {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--text-muted));
+  margin-top: 4px;
+}
+
+.timesheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.timesheet-actions button {
+  flex: 1;
+  padding: 12px;
+}
+
+.timesheet-history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timesheet-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 8px;
+}
+
+.timesheet-history-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.weekly-total {
+  font-size: 13px;
+  font-weight: 700;
+  color: hsl(var(--status-open-hue) 100% 55%);
+  background: hsl(var(--status-open-hue) 100% 50% / 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid hsl(var(--status-open-hue) 100% 50% / 0.2);
+}
+
+.timesheet-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* History Card */
+.history-item {
+  background: hsl(var(--bg-card));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.history-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02) linear-gradient(0deg, hsl(var(--bg-card)) 0%, hsl(var(--bg-input)) 100%);
+}
+
+.history-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-date {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.history-times {
+  font-size: 12px;
+  color: hsl(var(--text-secondary));
+}
+
+.history-notes {
+  font-size: 11px;
+  color: hsl(var(--text-muted));
+  font-style: italic;
+  margin-top: 2px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-hours {
+  font-size: 18px;
+  font-weight: 800;
+  color: hsl(var(--status-open-hue) 100% 60%);
+}
+
+.history-edit-btn {
+  background: transparent;
+  border: none;
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.history-edit-btn:hover {
+  background: hsl(var(--bg-input));
+  color: #fff;
+}
+
