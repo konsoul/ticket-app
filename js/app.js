@@ -65,6 +65,7 @@ const elements = {
   tsHistoryList: document.getElementById('tsHistoryList'),
   tsPrintBtn: document.getElementById('tsPrintBtn'),
   tsAddManualBtn: document.getElementById('tsAddManualBtn'),
+  tsAutoFillBtn: document.getElementById('tsAutoFillBtn'),
   
   // Edit Timesheet Modal
   editTimesheetModal: document.getElementById('editTimesheetModal'),
@@ -433,6 +434,15 @@ function setupEventListeners() {
   elements.tsAddManualBtn.addEventListener('click', () => {
     openNewTimesheetModal();
   });
+
+  // Auto-fill Monday to Friday
+  if (elements.tsAutoFillBtn) {
+    elements.tsAutoFillBtn.addEventListener('click', async () => {
+      if (confirm('Auto-fill missing Monday-Friday timesheets for the current week (8:00 AM - 4:30 PM)?')) {
+        await autoFillCurrentWeek();
+      }
+    });
+  }
 
   // Open Print Options Modal
   elements.tsPrintBtn.addEventListener('click', () => {
@@ -1125,4 +1135,38 @@ function generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr) {
   }, 300);
 }
 
+// Auto-fill missing Monday-Friday entries for the current week
+async function autoFillCurrentWeek() {
+  const monday = getThisMondaysDate();
+  
+  let addedCount = 0;
+  for (let i = 0; i < 5; i++) { // Mon = 0, Tue = 1, Wed = 2, Thu = 3, Fri = 4
+    const d = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    
+    // Check if entry already exists
+    const existing = await window.AppDB.getTimesheetByDate(dateStr);
+    if (!existing) {
+      const clockInMs = new Date(`${dateStr}T08:00:00`).getTime();
+      const clockOutMs = new Date(`${dateStr}T16:30:00`).getTime();
+      
+      const newTs = {
+        date: dateStr,
+        clockIn: clockInMs,
+        clockOut: clockOutMs,
+        lunchDuration: 30,
+        notes: ''
+      };
+      await window.AppDB.createTimesheet(newTs);
+      addedCount++;
+    }
+  }
+  
+  if (addedCount > 0) {
+    alert(`Successfully auto-filled ${addedCount} missing day(s) for the current week.`);
+    await refreshTimesheet();
+  } else {
+    alert('All Monday-Friday days for this week already have entries.');
+  }
+}
 
