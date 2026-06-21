@@ -179,115 +179,6 @@ header {
   background: rgba(239, 68, 68, 0.25);
   color: #ff8a8a;
 }
-
-.btn-circle {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  padding: 0;
-}
-
-/* Search and Filters */
-.search-container {
-  position: relative;
-  width: 100%;
-}
-
-.search-input {
-  width: 100%;
-  padding: 12px 16px 12px 42px;
-  font-family: var(--font-family);
-  font-size: 15px;
-  color: hsl(var(--text-primary));
-  background: hsl(var(--bg-input));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  outline: none;
-  transition: all var(--transition-fast);
-}
-
-.search-input:focus {
-  border-color: hsl(var(--accent));
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
-  background: hsl(var(--bg-card));
-}
-
-.search-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: hsl(var(--text-secondary));
-  pointer-events: none;
-  font-size: 16px;
-}
-
-.filter-tabs {
-  display: flex;
-  background: hsl(var(--bg-surface));
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-border);
-  gap: 2px;
-}
-
-.filter-tab {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: hsl(var(--text-secondary));
-  padding: 8px 4px;
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: calc(var(--radius-sm) - 2px);
-  transition: all var(--transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.filter-tab.active {
-  background: hsl(var(--bg-card));
-  color: #fff;
-  box-shadow: var(--shadow-sm);
-}
-
-.filter-tab 
-.filter-tab.active 
-
-
-/* Floating Action Button (FAB) */
-.fab {
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
-  background: linear-gradient(135deg, hsl(var(--accent)) 0%, #7c3aed 100%);
-  color: #fff;
-  border: none;
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-normal);
-  z-index: 90;
-}
-
-.fab:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.5);
-}
-
-.fab:active {
-  transform: translateY(0) scale(1);
-}
-
 /* Modals */
 .modal-overlay {
   position: fixed;
@@ -417,40 +308,6 @@ textarea.form-control {
   resize: vertical;
   min-height: 80px;
 }
-
-/* Status Button Toggle Group */
-.status-toggle-group {
-  display: flex;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.status-toggle-btn {
-  flex: 1;
-  background: hsl(var(--bg-input));
-  border: none;
-  color: hsl(var(--text-muted));
-  padding: 12px 8px;
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  text-align: center;
-}
-
-.status-toggle-btn:not(:last-child) {
-  border-right: 1px solid var(--glass-border);
-}
-
-.status-toggle-btn.active {
-  color: #fff;
-}
-
-
 /* Animations */
 @keyframes slideUp {
   from { transform: translateY(30px); opacity: 0; }
@@ -492,8 +349,6 @@ textarea.form-control {
     padding: 0;
   }
 }
-
-
 /* Timesheet Section */
 .timesheet-wrapper {
   display: flex;
@@ -511,17 +366,6 @@ textarea.form-control {
   box-shadow: var(--shadow-md);
   position: relative;
   overflow: hidden;
-}
-
-
-.timesheet-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.timesheet-actions button {
-  flex: 1;
-  padding: 12px;
 }
 
 .timesheet-history-section {
@@ -543,8 +387,6 @@ textarea.form-control {
   font-weight: 700;
   color: #fff;
 }
-
-
 .timesheet-history-list {
   display: flex;
   flex-direction: column;
@@ -560,7 +402,6 @@ textarea.form-control {
   margin-bottom: 4px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
   align-items: center;
   border-bottom: 1px solid var(--glass-border);
   cursor: pointer;
@@ -609,6 +450,63 @@ textarea.form-control {
   font-size: 13px;
   color: hsl(var(--status-open-hue) 100% 60%);
   font-weight: 600;
+}
+
+/* Month Grouping */
+.month-group-header {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.1));
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  margin-top: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.month-group-header:first-child {
+  margin-top: 0;
+}
+
+.month-group-header:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.15));
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.month-group-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-color);
+  font-weight: 700;
+}
+
+.month-group-content {
+  overflow: hidden;
+  transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out;
+  max-height: 5000px;
+  opacity: 1;
+  padding-left: 8px;
+  border-left: 2px solid rgba(139, 92, 246, 0.15);
+  margin-left: 4px;
+}
+
+.month-group-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  padding-left: 0;
+  border-left: none;
+}
+
+.month-totals {
+  font-size: 13px;
+  color: var(--primary-color);
+  font-weight: 600;
+  text-align: right;
 }
 
 /* History Card */
@@ -750,7 +648,6 @@ textarea.form-control {
 
   .app-container,
   .modal-overlay,
-  .fab,
   header {
     display: none !important;
   }
@@ -776,19 +673,6 @@ textarea.form-control {
     letter-spacing: 1px;
     color: #000;
   }
-
-  .print-meta-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    font-size: 11pt;
-    color: #000;
-  }
-
-  .print-meta-grid div {
-    padding: 4px 0;
-  }
-
   .print-table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -822,30 +706,4 @@ textarea.form-control {
     margin-top: 50px;
     page-break-inside: avoid;
   }
-
-  .signature-block {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    margin-right: 20px;
-  }
-
-  .signature-block:last-child {
-    margin-right: 0;
-  }
-
-  .signature-line {
-    border-bottom: 1px solid #000;
-    height: 35px;
-  }
-
-  .signature-label {
-    font-size: 9pt;
-    font-weight: bold;
-    margin-top: 5px;
-    color: #333;
-    text-align: center;
-  }
 }
-
-

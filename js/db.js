@@ -87,13 +87,5 @@ window.AppDB = {
   async deleteTimesheet(tsId) {
     const uid = getUid();
     await dbInstance.collection('users').doc(uid).collection('timesheets').doc(String(tsId)).delete();
-  },
-  
-  // Stubs for legacy import/export functionality which we can safely ignore or mock
-  async exportDatabase() {
-    return "{}";
-  },
-  async importDatabase(jsonData) {
-    console.log("Import disabled due to cloud migration.");
   }
 };

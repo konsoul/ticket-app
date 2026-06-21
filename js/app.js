@@ -7,15 +7,13 @@
 
 // Timesheet State
 let todayTimesheet = null;
-let timesheetTimerInterval = null;
 let allTimesheets = [];
 let editingTimesheet = null;
 
 // DOM Elements
 const elements = {
-    hourlyWageInput: document.getElementById('hourlyWageInput'),
-  
-  tsWeeklyTotal: document.getElementById('tsWeeklyTotal'),
+  hourlyWageInput: document.getElementById('hourlyWageInput'),
+  logoutBtn: document.getElementById('logoutBtn'),
     viewCurrentTab: document.getElementById('viewCurrentTab'),
   viewHistoryTab: document.getElementById('viewHistoryTab'),
   tsViewTitle: document.getElementById('tsViewTitle'),
@@ -25,6 +23,7 @@ const elements = {
   tsPrintBtn: document.getElementById('tsPrintBtn'),
   tsAddManualBtn: document.getElementById('tsAddManualBtn'),
   tsAutoFillBtn: document.getElementById('tsAutoFillBtn'),
+  tsSaveWeekBtn: document.getElementById('tsSaveWeekBtn'),
   
   // Edit Timesheet Modal
   editTimesheetModal: document.getElementById('editTimesheetModal'),
@@ -139,7 +138,6 @@ function setupEventListeners() {
   }
 
   
-  // Removed live clock in/out listeners
 
     // Navigation Tabs
   if (elements.viewCurrentTab) {
@@ -216,8 +214,17 @@ function setupEventListeners() {
   // Auto-fill Monday to Friday
   if (elements.tsAutoFillBtn) {
     elements.tsAutoFillBtn.addEventListener('click', async () => {
-      if (confirm('Auto-fill missing Monday-Friday timesheets for the current week (8:00 AM - 4:30 PM)?')) {
+      if (confirm('Auto-fill missing Monday-Friday timesheets?')) {
         await autoFillCurrentWeek();
+      }
+    });
+  }
+
+  // Handle Save Week button
+  if (elements.tsSaveWeekBtn) {
+    elements.tsSaveWeekBtn.addEventListener('click', async () => {
+      if (confirm('Are you sure you want to save the current week and move it to your History?')) {
+        await saveCurrentWeek();
       }
     });
   }
@@ -312,30 +319,33 @@ function renderTimesheetHistory() {
     return;
   }
 
-  // Identify current week Monday
-  const currentMondayStr = getLocalDateStr(getThisMondaysDate()); // Outputs YYYY-MM-DD
-
-  // Group timesheets by week (Monday as start of week)
-  const weeksMap = new Map();
-
+  const currentWeeksMap = new Map();
+  const historyWeeksMap = new Map();
   let grandTotalMins = 0;
   const currentWeekMondayStr = getMondayForDateStr(getLocalDateStr());
 
   allTimesheets.forEach(ts => {
     const mondayStr = getMondayForDateStr(ts.date);
     
-    // Exclude current week from the All-Time Income History total
-    if (mondayStr !== currentWeekMondayStr) {
+    // Determine if this entry is archived:
+    // - Explicitly archived entries are always history
+    // - Legacy entries (missing isArchived) from past calendar weeks default to history
+    // - Only entries with isArchived explicitly false, or legacy entries from the current calendar week, stay in current
+    const isArchived = ts.isArchived === true || (ts.isArchived === undefined && mondayStr !== currentWeekMondayStr);
+    const mapToUse = isArchived ? historyWeeksMap : currentWeeksMap;
+    
+    // Only archived entries count toward the All-Time Income History total
+    if (isArchived) {
       grandTotalMins += calculateTimesheetMinutes(ts);
     }
-    if (!weeksMap.has(mondayStr)) {
-      weeksMap.set(mondayStr, {
+    if (!mapToUse.has(mondayStr)) {
+      mapToUse.set(mondayStr, {
         mondayStr,
         entries: [],
         totalMinutes: 0
       });
     }
-    const week = weeksMap.get(mondayStr);
+    const week = mapToUse.get(mondayStr);
     week.entries.push(ts);
     week.totalMinutes += calculateTimesheetMinutes(ts);
   });
@@ -358,11 +368,8 @@ function renderTimesheetHistory() {
   `;
   elements.tsHistoryList.appendChild(grandTotalHeader);
 
-  // Render each week group
-  Array.from(weeksMap.values()).forEach(week => {
-    const isCurrentWeek = week.mondayStr === getMondayForDateStr(getLocalDateStr());
-    
-    // 1. Render Week Header (only for history tab)
+  // Helper to render week entries into a container
+  const renderWeekInto = (week, targetContainer, isHistoryTab) => {
     const weekHeader = document.createElement('div');
     weekHeader.className = 'week-group-header';
     
@@ -382,24 +389,47 @@ function renderTimesheetHistory() {
     weekHeader.innerHTML = `
       <div style="display: flex; align-items: center;">
         <h4>Week of ${dateRangeStr}</h4>
-        ${!isCurrentWeek ? '<svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' : ''}
+        ${isHistoryTab ? '<svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' : ''}
       </div>
-      <div class="week-totals">Total: ${weeklyHours} hrs${earningsText}</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="week-totals" style="margin: 0;">Total: ${weeklyHours} hrs${earningsText}</div>
+        ${isHistoryTab ? `<button class="history-print-btn btn btn-secondary" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;" title="Print this week" aria-label="Print this week">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print
+        </button>` : ''}
+      </div>
     `;
     
-    const targetContainer = isCurrentWeek ? elements.tsCurrentWeekList : elements.tsHistoryList;
+    // Wire up the print button on history headers
+    if (isHistoryTab) {
+      const printBtn = weekHeader.querySelector('.history-print-btn');
+      if (printBtn) {
+        printBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const sat = new Date(mon.getTime() + 5 * 24 * 60 * 60 * 1000);
+          const satYear = sat.getFullYear();
+          const satMonth = String(sat.getMonth() + 1).padStart(2, '0');
+          const satDay = String(sat.getDate()).padStart(2, '0');
+          
+          elements.optEmpName.value = localStorage.getItem('ts_print_emp_name') || 'Brad Rappa';
+          elements.optDept.value = localStorage.getItem('ts_print_dept') || 'Field Service';
+          elements.optSupervisor.value = localStorage.getItem('ts_print_supervisor') || '';
+          elements.optWeekEnding.value = `${satYear}-${satMonth}-${satDay}`;
+          
+          openModal(elements.printOptionsModal);
+        });
+      }
+    }
+
     targetContainer.appendChild(weekHeader);
 
-    // Create a container for the entries to allow collapsing
     const weekContent = document.createElement('div');
     weekContent.className = 'week-group-content';
     
-    // History weeks start collapsed
-    if (!isCurrentWeek) {
+    if (isHistoryTab) {
       weekContent.classList.add('collapsed');
       weekHeader.classList.add('collapsed');
       
-      // Make history header clickable to toggle
       weekHeader.addEventListener('click', () => {
         weekContent.classList.toggle('collapsed');
         weekHeader.classList.toggle('collapsed');
@@ -408,7 +438,6 @@ function renderTimesheetHistory() {
 
     targetContainer.appendChild(weekContent);
 
-    // 2. Render daily entries for this week
     week.entries.forEach(ts => {
       const itemDate = new Date(ts.date + 'T00:00:00');
       
@@ -456,13 +485,90 @@ function renderTimesheetHistory() {
 
       weekContent.appendChild(card);
     });
+  };
+
+  // Render current week(s) - flat, no month grouping needed
+  Array.from(currentWeeksMap.values()).forEach(week => {
+    renderWeekInto(week, elements.tsCurrentWeekList, false);
+  });
+
+  // Render history grouped by month
+  // First, group the history weeks by month (YYYY-MM based on the Monday of each week)
+  const monthsMap = new Map(); // key: "YYYY-MM", value: { monthKey, label, weeks: [], totalMinutes }
+  
+  Array.from(historyWeeksMap.values()).forEach(week => {
+    // Use the first entry's date to determine the month this week belongs to
+    // (use the Monday date of the week for consistency)
+    const monDate = new Date(week.mondayStr + 'T00:00:00');
+    const monthKey = `${monDate.getFullYear()}-${String(monDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!monthsMap.has(monthKey)) {
+      const label = monDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      monthsMap.set(monthKey, {
+        monthKey,
+        label,
+        weeks: [],
+        totalMinutes: 0
+      });
+    }
+    const month = monthsMap.get(monthKey);
+    month.weeks.push(week);
+    month.totalMinutes += week.totalMinutes;
+  });
+
+  // Sort months descending (newest first)
+  const sortedMonths = Array.from(monthsMap.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+
+  sortedMonths.forEach(month => {
+    // Render month header
+    const monthHeader = document.createElement('div');
+    monthHeader.className = 'month-group-header';
+    
+    const monthHrs = (month.totalMinutes / 60).toFixed(1);
+    let monthEarningsText = '';
+    if (wageRate > 0) {
+      const monthGross = (month.totalMinutes / 60) * wageRate;
+      const monthNet = monthGross * (1 - 0.156);
+      monthEarningsText = `<br>Gross: $${monthGross.toFixed(2)} | Net: $${monthNet.toFixed(2)}`;
+    }
+
+    monthHeader.innerHTML = `
+      <div style="display: flex; align-items: center;">
+        <h3>${month.label}</h3>
+        <svg class="chevron-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="month-totals">${monthHrs} hrs${monthEarningsText}</div>
+    `;
+
+    elements.tsHistoryList.appendChild(monthHeader);
+
+    // Month content container (holds all weeks for this month)
+    const monthContent = document.createElement('div');
+    monthContent.className = 'month-group-content collapsed';
+    monthHeader.classList.add('collapsed');
+
+    monthHeader.addEventListener('click', () => {
+      monthContent.classList.toggle('collapsed');
+      monthHeader.classList.toggle('collapsed');
+    });
+
+    elements.tsHistoryList.appendChild(monthContent);
+
+    // Render each week inside this month's content
+    month.weeks.forEach(week => {
+      renderWeekInto(week, monthContent, true);
+    });
   });
 
   if (elements.tsCurrentWeekList.innerHTML === '') {
     elements.tsCurrentWeekList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">No timesheets logged for this week.</div>';
   }
-  if (elements.tsHistoryList.innerHTML === '') {
-    elements.tsHistoryList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">No timesheet history found.</div>';
+  const isOnlyHeader = elements.tsHistoryList.children.length === 1 && elements.tsHistoryList.children[0].className === 'grand-total-header';
+  if (isOnlyHeader) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;';
+    emptyMsg.textContent = 'No timesheet history found.';
+    elements.tsHistoryList.appendChild(emptyMsg);
   }
 }
 
@@ -718,10 +824,37 @@ function generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr) {
   }, 50);
 }
 
-// Auto-fill missing Monday-Friday entries for the current week
+// Auto-fill missing Monday-Friday entries for the active week
 async function autoFillCurrentWeek() {
-  const monday = getThisMondaysDate();
+  // Determine which week to start. Default to current calendar week.
+  let monday = getThisMondaysDate();
   
+  // Find the latest week among all timesheets
+  if (allTimesheets.length > 0) {
+    let latestTsTime = 0;
+    allTimesheets.forEach(ts => {
+      const tsMondayTime = new Date(getMondayForDateStr(ts.date) + 'T00:00:00').getTime();
+      if (tsMondayTime > latestTsTime) {
+        latestTsTime = tsMondayTime;
+      }
+    });
+    
+    const latestMondayStr = getLocalDateStr(new Date(latestTsTime));
+    const hasUnarchivedLatest = allTimesheets.some(ts => getMondayForDateStr(ts.date) === latestMondayStr && !ts.isArchived);
+    const hasArchivedLatest = allTimesheets.some(ts => getMondayForDateStr(ts.date) === latestMondayStr && ts.isArchived);
+    
+    let targetMondayTime = monday.getTime();
+    if (latestTsTime >= monday.getTime()) {
+      if (hasArchivedLatest && !hasUnarchivedLatest) {
+         // The latest week is fully archived, so we should generate the NEXT week
+         targetMondayTime = latestTsTime + 7 * 24 * 60 * 60 * 1000;
+      } else {
+         targetMondayTime = latestTsTime;
+      }
+    }
+    monday = new Date(targetMondayTime);
+  }
+
   let addedCount = 0;
   for (let i = 0; i < 5; i++) { // Mon = 0, Tue = 1, Wed = 2, Thu = 3, Fri = 4
     const d = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
@@ -738,7 +871,8 @@ async function autoFillCurrentWeek() {
         clockIn: clockInMs,
         clockOut: clockOutMs,
         lunchDuration: 30,
-        notes: ''
+        notes: '',
+        isArchived: false
       };
       await window.AppDB.createTimesheet(newTs);
       addedCount++;
@@ -746,10 +880,29 @@ async function autoFillCurrentWeek() {
   }
   
   if (addedCount > 0) {
-    alert(`Successfully auto-filled ${addedCount} missing day(s) for the current week.`);
+    alert(`Successfully generated ${addedCount} day(s) for the week of ${getLocalDateStr(monday)}.`);
     await refreshTimesheet();
   } else {
-    alert('All Monday-Friday days for this week already have entries.');
+    alert(`All Monday-Friday days for the week of ${getLocalDateStr(monday)} already have entries.`);
   }
+}
+
+async function saveCurrentWeek() {
+  // Find all unarchived entries
+  const unarchived = allTimesheets.filter(ts => !ts.isArchived);
+  if (unarchived.length === 0) {
+    alert('No active timesheets to save.');
+    return;
+  }
+  
+  let savedCount = 0;
+  for (const ts of unarchived) {
+    ts.isArchived = true;
+    await window.AppDB.updateTimesheet(ts);
+    savedCount++;
+  }
+  
+  alert(`Successfully saved ${savedCount} timesheets to History.`);
+  await refreshTimesheet();
 }
 
