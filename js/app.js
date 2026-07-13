@@ -774,10 +774,66 @@ function generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr) {
   // Close Options Modal
   closeAllModals();
   
-  // Trigger native print dialog (relying on @media print CSS rules)
+  // Trigger ultra-fast iframe printing (bypasses Safari massive DOM print layout bugs)
   setTimeout(() => {
-    window.print();
-  }, 150);
+    let printFrame = document.getElementById('print-iframe');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'print-iframe';
+      // Beta 3 Stealth Styles: Browser thinks it's visible, but it's invisible to the user
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '1px';
+      printFrame.style.height = '1px';
+      printFrame.style.opacity = '0.01';
+      printFrame.style.pointerEvents = 'none';
+      printFrame.style.border = 'none';
+      printFrame.style.zIndex = '-1';
+      document.body.appendChild(printFrame);
+    }
+    
+    const doc = printFrame.contentWindow.document;
+    const printContent = document.getElementById('printContainer').innerHTML;
+    const baseUrl = window.location.href.split('?')[0].replace('index.html', '');
+    
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Timesheet</title>
+          <base href="${baseUrl}">
+          <style>
+            @page { size: letter; margin: 12mm 15mm 12mm 15mm; }
+            body { 
+              font-family: 'Times New Roman', Times, serif; 
+              font-size: 11pt; 
+              color: #000; 
+              margin: 0; 
+              padding: 0;
+              background: #fff;
+            }
+            * { box-sizing: border-box; }
+            .print-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 10pt; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 6px; }
+          </style>
+        </head>
+        <body>
+          <div style="transform: scale(0.85); transform-origin: top left; width: 117.64%;">
+            ${printContent}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+    
+    // Give iframe a moment to render image, then print
+    setTimeout(() => {
+      printFrame.contentWindow.focus();
+      printFrame.contentWindow.print();
+    }, 150);
+  }, 50);
 }
 
 // Auto-fill missing Monday-Friday entries for the active week
