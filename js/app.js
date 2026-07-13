@@ -231,6 +231,9 @@ function setupEventListeners() {
 
   // Open Print Options Modal
   elements.tsPrintBtn.addEventListener('click', () => {
+    console.time('PrintMenuLoad');
+    console.log('[Print] Opening Print Weekly menu...');
+    
     // Populate stored defaults
     elements.optEmpName.value = localStorage.getItem('ts_print_emp_name') || 'Brad Rappa';
     elements.optDept.value = localStorage.getItem('ts_print_dept') || 'Field Service';
@@ -244,11 +247,14 @@ function setupEventListeners() {
     elements.optWeekEnding.value = `${year}-${month}-${day}`;
     
     openModal(elements.printOptionsModal);
+    console.timeEnd('PrintMenuLoad');
   });
 
   // Handle Print Form Submission
   elements.printOptionsForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    console.time('GeneratePrintout');
+    console.log('[Print] Generate Printout button clicked...');
     
     const empName = elements.optEmpName.value.trim();
     const dept = elements.optDept.value.trim();
@@ -261,6 +267,7 @@ function setupEventListeners() {
     localStorage.setItem('ts_print_supervisor', supervisor);
     
     generateAndPrintTimesheet(empName, dept, supervisor, weekEndingStr);
+    console.timeEnd('GeneratePrintout');
   });
 }
 
