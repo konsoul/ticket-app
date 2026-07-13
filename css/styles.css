@@ -628,6 +628,15 @@ textarea.form-control {
 }
 
 @media print {
+  * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+
   @page {
     size: letter;
     margin: 12mm 15mm 12mm 15mm;
