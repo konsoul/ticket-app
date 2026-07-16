@@ -34,6 +34,7 @@ const elements = {
   editTsLunchDuration: document.getElementById('editTsLunchDuration'),
   editTsClockOut: document.getElementById('editTsClockOut'),
   editTsNotes: document.getElementById('editTsNotes'),
+  editTsPaid: document.getElementById('editTsPaid'),
   editTsDeleteBtn: document.getElementById('editTsDeleteBtn'),
 
   // Print Settings Modal & Container
@@ -56,7 +57,18 @@ const elements = {
   authForm: document.getElementById('authForm'),
   authEmail: document.getElementById('authEmail'),
   authPassword: document.getElementById('authPassword'),
-  authErrorMsg: document.getElementById('authErrorMsg')
+  authErrorMsg: document.getElementById('authErrorMsg'),
+
+  // Payroll Dashboard
+  viewPayrollTab: document.getElementById('viewPayrollTab'),
+  timesheetSection: document.getElementById('timesheetSection'),
+  payrollSection: document.getElementById('payrollSection'),
+  owedAmount: document.getElementById('owedAmount'),
+  owedHours: document.getElementById('owedHours'),
+  owedGross: document.getElementById('owedGross'),
+  owedNet: document.getElementById('owedNet'),
+  paydayList: document.getElementById('paydayList'),
+  unpaidList: document.getElementById('unpaidList')
 };
 
 let isAppInitialized = false;
@@ -146,6 +158,9 @@ function setupEventListeners() {
   if (elements.viewHistoryTab) {
     elements.viewHistoryTab.addEventListener('click', () => switchView('history'));
   }
+  if (elements.viewPayrollTab) {
+    elements.viewPayrollTab.addEventListener('click', () => switchView('payroll'));
+  }
 
   // Handle Delete Timesheet Entry
   elements.editTsDeleteBtn.addEventListener('click', async () => {
@@ -185,6 +200,7 @@ function setupEventListeners() {
 
     editingTimesheet.lunchDuration = isNaN(lunchMins) ? 0 : Math.max(0, lunchMins);
     editingTimesheet.notes = notesStr;
+    editingTimesheet.isPaid = elements.editTsPaid.checked;
 
     try {
       if (editingTimesheet.id) {
@@ -286,20 +302,32 @@ function closeAllModals() {
 // --- TIMESHEETS LOGIC & RENDERING ---
 
 function switchView(viewName) {
+  // Deactivate all tabs
+  elements.viewCurrentTab.classList.remove('active');
+  elements.viewHistoryTab.classList.remove('active');
+  elements.viewPayrollTab.classList.remove('active');
+
   if (viewName === 'current') {
     elements.viewCurrentTab.classList.add('active');
-    elements.viewHistoryTab.classList.remove('active');
+    elements.timesheetSection.style.display = 'block';
+    elements.payrollSection.style.display = 'none';
     elements.tsCurrentWeekList.style.display = 'block';
     elements.tsHistoryList.style.display = 'none';
     elements.tsViewTitle.textContent = 'Current Week';
     if (elements.tsActionButtons) elements.tsActionButtons.style.display = 'flex';
-  } else {
-    elements.viewCurrentTab.classList.remove('active');
+  } else if (viewName === 'history') {
     elements.viewHistoryTab.classList.add('active');
+    elements.timesheetSection.style.display = 'block';
+    elements.payrollSection.style.display = 'none';
     elements.tsCurrentWeekList.style.display = 'none';
     elements.tsHistoryList.style.display = 'block';
     elements.tsViewTitle.textContent = 'Income History';
     if (elements.tsActionButtons) elements.tsActionButtons.style.display = 'none';
+  } else if (viewName === 'payroll') {
+    elements.viewPayrollTab.classList.add('active');
+    elements.timesheetSection.style.display = 'none';
+    elements.payrollSection.style.display = 'block';
+    renderPayrollDashboard();
   }
 }
 
@@ -309,7 +337,26 @@ async function refreshTimesheet() {
   // Fetch today's entry
   todayTimesheet = await window.AppDB.getTimesheetByDate(dateStr);
   allTimesheets = await window.AppDB.getAllTimesheets();
-  
+  // Auto-mark old timesheets as paid (One-time migration for July 15th payday)
+  let madeChanges = false;
+  for (let ts of allTimesheets) {
+    // The July 15th paycheck actually only covers up to June 30th.
+    if (ts.isPaid === undefined && ts.date <= '2026-06-30') {
+      ts.isPaid = true;
+      await window.AppDB.updateTimesheet(ts);
+      madeChanges = true;
+    }
+    // Revert July timesheets that were accidentally swept up in the previous migration
+    if (ts.date >= '2026-07-01' && ts.isPaid === true) {
+      ts.isPaid = false;
+      await window.AppDB.updateTimesheet(ts);
+      madeChanges = true;
+    }
+  }
+  if (madeChanges) {
+    allTimesheets = await window.AppDB.getAllTimesheets();
+  }
+
   renderTimesheetHistory();
 }
 
@@ -469,8 +516,14 @@ function renderTimesheetHistory() {
         dailyEarningsText = ` <span style="color: var(--primary-color); font-size: 11px; margin-top: 4px; display: block; font-weight: 600;">Gross: $${grossEarnings.toFixed(2)} | Net: $${netEarnings.toFixed(2)}</span>`;
       }
 
+      const paidClass = ts.isPaid ? 'is-paid' : '';
       card.innerHTML = `
-        <div class="history-left">
+        <button class="paid-toggle-btn ${paidClass}" data-ts-id="${ts.id}" aria-label="Toggle paid status" title="${ts.isPaid ? 'Paid' : 'Unpaid — click to mark paid'}">
+          <div class="check-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+        </button>
+        <div class="history-left" style="flex: 1;">
           <div class="history-date">${cleanDateFormatted}</div>
           <div class="history-times">${displayClockIn} - ${displayClockOut} | Lunch: ${ts.lunchDuration}m</div>
           ${ts.notes ? `<div class="history-notes" title="${escapeHTML(ts.notes)}">${escapeHTML(ts.notes)}</div>` : ''}
@@ -485,6 +538,19 @@ function renderTimesheetHistory() {
           </button>
         </div>
       `;
+
+      // Wire paid toggle
+      card.querySelector('.paid-toggle-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        ts.isPaid = !ts.isPaid;
+        try {
+          await window.AppDB.updateTimesheet(ts);
+          await refreshTimesheet();
+        } catch (err) {
+          console.error('Failed to toggle paid status:', err);
+          ts.isPaid = !ts.isPaid; // revert
+        }
+      });
 
       card.querySelector('.history-edit-btn').addEventListener('click', () => {
         openEditTimesheetModal(ts);
@@ -589,6 +655,7 @@ function openEditTimesheetModal(ts) {
   elements.editTsLunchDuration.value = editingTimesheet.lunchDuration;
   elements.editTsClockOut.value = editingTimesheet.clockOut ? formatTimeInput(new Date(editingTimesheet.clockOut)) : '';
   elements.editTsNotes.value = editingTimesheet.notes || '';
+  elements.editTsPaid.checked = !!editingTimesheet.isPaid;
   
   elements.editTsDeleteBtn.style.display = 'block';
   openModal(elements.editTimesheetModal);
@@ -604,9 +671,393 @@ function openNewTimesheetModal() {
   elements.editTsLunchDuration.value = 30;
   elements.editTsClockOut.value = '';
   elements.editTsNotes.value = '';
+  elements.editTsPaid.checked = false;
   
   elements.editTsDeleteBtn.style.display = 'none';
   openModal(elements.editTimesheetModal);
+}
+
+// --- PAYROLL DASHBOARD ---
+
+// Generate payday dates based on semi-monthly pattern (1st and 15th of each month)
+// User started June 1, 2026. First payday was June 15 (or 16), then July 1, July 15, etc.
+// Pattern: paydays fall on the 1st and 15th of each month.
+// If a payday falls on a weekend, it shifts to the preceding Friday.
+function generatePaydays(count) {
+  const paydays = [];
+  // Start generating from June 15, 2026 (first regular payday)
+  let year = 2026;
+  let month = 5; // June (0-indexed)
+  let isFirst = false; // false = 15th, true = 1st of next month
+
+  // First regular payday: June 15, 2026
+  // Then: July 1, July 15, Aug 1, Aug 15, ...
+  
+  let dayOfMonth = 15;
+
+  while (paydays.length < count) {
+    let d = new Date(year, month, dayOfMonth);
+    
+    // Adjust for weekends: shift to previous Friday
+    const dow = d.getDay();
+    if (dow === 0) d.setDate(d.getDate() - 2); // Sunday -> Friday
+    if (dow === 6) d.setDate(d.getDate() - 1); // Saturday -> Friday
+
+    paydays.push(new Date(d));
+
+    // Advance to next payday
+    if (dayOfMonth === 15) {
+      // Next is 1st of the following month
+      dayOfMonth = 1;
+      month++;
+      if (month > 11) { month = 0; year++; }
+    } else {
+      // Next is 15th of this month
+      dayOfMonth = 15;
+    }
+  }
+
+  return paydays;
+}
+
+// Determine which pay period a date falls into
+// Pay periods: 1st-15th (paid on 16th) and 16th-end of month (paid on 1st of next month)
+function getPayPeriodForDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDate();
+  const month = d.getMonth();
+  const year = d.getFullYear();
+
+  if (day <= 15) {
+    // Period: 1st-15th of this month, paid on 16th of this month
+    return {
+      start: new Date(year, month, 1),
+      end: new Date(year, month, 15),
+      label: `${new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short' })} 1–15`
+    };
+  } else {
+    // Period: 16th-end of this month, paid on 1st of next month
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return {
+      start: new Date(year, month, 16),
+      end: new Date(year, month, lastDay),
+      label: `${new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short' })} 16–${lastDay}`
+    };
+  }
+}
+
+// Render the full payroll dashboard
+function renderPayrollDashboard() {
+  const wageRate = elements.hourlyWageInput ? (parseFloat(elements.hourlyWageInput.value) || 0) : 0;
+
+  // --- Oregon Trip Fund ---
+  // Date range: July 1, 2026 to August 21, 2026
+  const tripStart = new Date('2026-07-01T00:00:00');
+  const tripEnd = new Date('2026-08-21T00:00:00');
+  let totalTripDays = 0;
+  
+  // Count weekdays
+  let currentDay = new Date(tripStart);
+  while (currentDay <= tripEnd) {
+    const dayOfWeek = currentDay.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+      totalTripDays++;
+    }
+    currentDay.setDate(currentDay.getDate() + 1);
+  }
+  
+  // 4 hours a day
+  const potentialGross = totalTripDays * 4 * wageRate;
+  const potentialNet = potentialGross * (1 - 0.156);
+
+  // Calculate Secured (Actual hours logged between these dates)
+  let securedMins = 0;
+  allTimesheets.forEach(ts => {
+    if (ts.date >= '2026-07-01' && ts.date <= '2026-08-21') {
+      securedMins += calculateTimesheetMinutes(ts);
+    }
+  });
+  
+  const securedGross = (securedMins / 60) * wageRate;
+  const securedNet = securedGross * (1 - 0.156);
+  
+  const progressPercent = potentialNet > 0 ? Math.min(100, (securedNet / potentialNet) * 100) : 0;
+
+  const securedEl = document.getElementById('tripSecured');
+  const potentialEl = document.getElementById('tripPotential');
+  const progressFill = document.getElementById('tripProgressBar');
+  const progressText = document.getElementById('tripProgressText');
+
+  if (securedEl && potentialEl && progressFill && progressText) {
+    securedEl.textContent = `$${securedNet.toFixed(2)}`;
+    potentialEl.textContent = `$${potentialNet.toFixed(2)}`;
+    
+    // Ensure CSS transition takes effect
+    setTimeout(() => {
+      progressFill.style.width = `${progressPercent}%`;
+    }, 50);
+    
+    progressText.textContent = `${Math.round(progressPercent)}% of goal secured`;
+  }
+
+
+
+  // --- Owed Balance ---
+  const unpaidTimesheets = allTimesheets.filter(ts => !ts.isPaid);
+  let totalUnpaidMins = 0;
+  unpaidTimesheets.forEach(ts => {
+    totalUnpaidMins += calculateTimesheetMinutes(ts);
+  });
+
+  const unpaidHours = (totalUnpaidMins / 60).toFixed(2);
+  const grossOwed = (totalUnpaidMins / 60) * wageRate;
+  const netOwed = grossOwed * (1 - 0.156);
+
+  elements.owedAmount.textContent = wageRate > 0 ? `$${netOwed.toFixed(2)}` : `${unpaidHours} hrs`;
+  elements.owedHours.textContent = `${unpaidHours} hrs`;
+  elements.owedGross.textContent = `$${grossOwed.toFixed(2)}`;
+  elements.owedNet.textContent = `$${netOwed.toFixed(2)}`;
+
+  // --- Payday Schedule ---
+  const paydays = generatePaydays(20); // Generate 20 paydays for display
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  elements.paydayList.innerHTML = '';
+
+  // Find the next upcoming payday (strictly in the future)
+  let nextPaydayIndex = paydays.findIndex(pd => pd > today);
+  if (nextPaydayIndex === -1) nextPaydayIndex = paydays.length; // all past
+
+  // Show last 3 past + next + 5 future = window of ~9
+  const startIdx = Math.max(0, nextPaydayIndex - 3);
+  const endIdx = Math.min(paydays.length, nextPaydayIndex + 6);
+
+  for (let i = startIdx; i < endIdx; i++) {
+    const pd = paydays[i];
+    const isPast = pd <= today;
+    const isNext = i === nextPaydayIndex;
+    const isFuture = pd > today && !isNext;
+
+    const item = document.createElement('div');
+    item.className = `payday-item fade-in ${isPast ? 'is-past' : ''} ${isNext ? 'is-next' : ''}`;
+
+    const dateFormatted = pd.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    // Determine the pay period this payday covers
+    const pdDay = pd.getDate();
+    const pdMonth = pd.getMonth();
+    const pdYear = pd.getFullYear();
+    let periodLabel = '';
+    let periodEstimate = '';
+
+    // Payday on 15th covers 16th-end of previous month
+    // Payday on 1st covers 1st-15th of previous month
+    if (pdDay >= 13 && pdDay <= 15) {
+      // Covers 16th-end of previous month
+      const prevMonth = new Date(pdYear, pdMonth - 1, 16);
+      const prevMonthName = prevMonth.toLocaleDateString(undefined, { month: 'short' });
+      const lastDayPrev = new Date(pdYear, pdMonth, 0).getDate();
+      periodLabel = `For ${prevMonthName} 16–${lastDayPrev}`;
+      
+      if (isNext && wageRate > 0) {
+        let periodMins = 0;
+        allTimesheets.forEach(ts => {
+          const tsDate = new Date(ts.date + 'T00:00:00');
+          if (tsDate.getMonth() === prevMonth.getMonth() && tsDate.getFullYear() === prevMonth.getFullYear() && tsDate.getDate() >= 16) {
+            periodMins += calculateTimesheetMinutes(ts);
+          }
+        });
+        const est = (periodMins / 60) * wageRate * (1 - 0.156);
+        if (periodMins > 0) periodEstimate = `~$${est.toFixed(2)} net`;
+      }
+    } else if (pdDay <= 2) {
+      // Covers 1st-15th of previous month
+      const prevMonth = new Date(pdYear, pdMonth - 1, 1);
+      const prevMonthName = prevMonth.toLocaleDateString(undefined, { month: 'short' });
+      periodLabel = `For ${prevMonthName} 1–15`;
+
+      if (isNext && wageRate > 0) {
+        let periodMins = 0;
+        allTimesheets.forEach(ts => {
+          const tsDate = new Date(ts.date + 'T00:00:00');
+          if (tsDate.getMonth() === prevMonth.getMonth() && tsDate.getFullYear() === prevMonth.getFullYear() && tsDate.getDate() <= 15) {
+            periodMins += calculateTimesheetMinutes(ts);
+          }
+        });
+        const est = (periodMins / 60) * wageRate * (1 - 0.156);
+        if (periodMins > 0) periodEstimate = `~$${est.toFixed(2)} net`;
+      }
+    }
+
+    let statusLabel = '';
+    if (isPast) {
+      const pdDateString = `${pdYear}-${String(pdMonth + 1).padStart(2, '0')}-${String(pdDay).padStart(2, '0')}`;
+      let paidAmount = '';
+      if (pdDateString === '2026-06-15' || pdDateString === '2026-06-16') paidAmount = '$354.62';
+      if (pdDateString === '2026-07-01') paidAmount = '$1026.94';
+      if (pdDateString === '2026-07-15') paidAmount = '$711.75';
+      
+      if (paidAmount) {
+         statusLabel = `<span class="payday-label past" style="color: hsl(var(--status-open-hue) 100% 60%);">Paid ${paidAmount}</span>`;
+      } else {
+         statusLabel = '<span class="payday-label past">Paid</span>';
+      }
+    } else if (isNext) {
+      statusLabel = '<span class="payday-label next">Next Payday</span>';
+    } else {
+      statusLabel = '<span class="payday-label future">Upcoming</span>';
+    }
+
+    item.innerHTML = `
+      <div>
+        <div class="payday-date">${dateFormatted}</div>
+        ${periodLabel ? `<div class="payday-period">${periodLabel}</div>` : ''}
+      </div>
+      <div style="text-align: right;">
+        ${statusLabel}
+        ${periodEstimate ? `<div class="payday-estimate">${periodEstimate}</div>` : ''}
+      </div>
+    `;
+
+    elements.paydayList.appendChild(item);
+  }
+
+  // --- Unpaid Timesheets List ---
+  elements.unpaidList.innerHTML = '';
+
+  if (unpaidTimesheets.length === 0) {
+    elements.unpaidList.innerHTML = '<div style="color: hsl(var(--text-muted)); font-size: 13px; text-align: center; padding: 24px 0;">All timesheets have been paid! 🎉</div>';
+  } else {
+    const getMonday = (dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      const yr = mon.getFullYear();
+      const m = String(mon.getMonth() + 1).padStart(2, '0');
+      const dt = String(mon.getDate()).padStart(2, '0');
+      return `${yr}-${m}-${dt}`;
+    };
+
+    const unpaidWeeksMap = new Map();
+    unpaidTimesheets.forEach(ts => {
+      const mondayStr = getMonday(ts.date);
+      if (!unpaidWeeksMap.has(mondayStr)) {
+        unpaidWeeksMap.set(mondayStr, {
+          mondayStr: mondayStr,
+          entries: [],
+          totalMinutes: 0
+        });
+      }
+      const week = unpaidWeeksMap.get(mondayStr);
+      week.entries.push(ts);
+      week.totalMinutes += calculateTimesheetMinutes(ts);
+    });
+
+    const sortedWeeks = Array.from(unpaidWeeksMap.values()).sort((a, b) => b.mondayStr.localeCompare(a.mondayStr));
+
+    sortedWeeks.forEach(week => {
+      week.entries.sort((a, b) => b.date.localeCompare(a.date));
+
+      const weekHeader = document.createElement('div');
+      weekHeader.className = 'week-group-header collapsed';
+      
+      const mon = new Date(week.mondayStr + 'T00:00:00');
+      const sun = new Date(mon.getTime() + 6 * 24 * 60 * 60 * 1000);
+      const dateOptions = { month: 'short', day: 'numeric' };
+      const dateRangeStr = `${mon.toLocaleDateString(undefined, dateOptions)} - ${sun.toLocaleDateString(undefined, dateOptions)}, ${mon.getFullYear()}`;
+      
+      const weeklyHours = (week.totalMinutes / 60).toFixed(1);
+      let earningsText = '';
+      if (wageRate > 0) {
+        const grossEarnings = (week.totalMinutes / 60) * wageRate;
+        const netEarnings = grossEarnings * (1 - 0.156);
+        earningsText = ` | Net: $${netEarnings.toFixed(2)}`;
+      }
+
+      weekHeader.innerHTML = `
+        <div style="display: flex; align-items: center;">
+          <h4>Week of ${dateRangeStr}</h4>
+          <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="week-totals" style="margin: 0;">Unpaid: ${weeklyHours} hrs${earningsText}</div>
+        </div>
+      `;
+
+      elements.unpaidList.appendChild(weekHeader);
+
+      const weekContent = document.createElement('div');
+      weekContent.className = 'week-group-content collapsed';
+      
+      weekHeader.addEventListener('click', () => {
+        weekContent.classList.toggle('collapsed');
+        weekHeader.classList.toggle('collapsed');
+      });
+
+      elements.unpaidList.appendChild(weekContent);
+
+      week.entries.forEach(ts => {
+        const itemDate = new Date(ts.date + 'T00:00:00');
+        const card = document.createElement('div');
+        card.className = 'history-item fade-in';
+
+        const cleanDateFormatted = itemDate.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+
+        const totalMins = calculateTimesheetMinutes(ts);
+        const decimalHrs = (totalMins / 60).toFixed(2);
+        let earningsTextItem = '';
+        if (wageRate > 0) {
+          const gross = (totalMins / 60) * wageRate;
+          const net = gross * (1 - 0.156);
+          earningsTextItem = `<span style="color: var(--primary-color); font-size: 11px; display: block; font-weight: 600;">$${net.toFixed(2)} net</span>`;
+        }
+
+        card.innerHTML = `
+          <button class="paid-toggle-btn" data-ts-id="${ts.id}" aria-label="Mark as paid" title="Click to mark as paid">
+            <div class="check-icon">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+          </button>
+          <div class="history-left" style="flex: 1;">
+            <div class="history-date">${cleanDateFormatted}</div>
+            ${ts.notes ? `<div class="history-notes" title="${escapeHTML(ts.notes)}">${escapeHTML(ts.notes)}</div>` : ''}
+          </div>
+          <div class="history-right">
+            <div>
+              <div class="history-hours">${decimalHrs} hrs</div>
+              ${earningsTextItem}
+            </div>
+          </div>
+        `;
+
+        card.querySelector('.paid-toggle-btn').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          ts.isPaid = true;
+          try {
+            await window.AppDB.updateTimesheet(ts);
+            await refreshTimesheet();
+            renderPayrollDashboard(); // Re-render the dashboard
+          } catch (err) {
+            console.error('Failed to mark as paid:', err);
+            ts.isPaid = false;
+          }
+        });
+
+        weekContent.appendChild(card);
+      });
+    });
+  }
 }
 
 // --- HELPER UTILITIES ---
