@@ -2,27 +2,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* HSL Color System */
-  --bg-base: 224deg 25% 6%;      /* #0b0f19 */
-  --bg-surface: 222deg 22% 11%;   /* #141b2d */
-  --bg-card: 223deg 20% 15%;      /* #1e2638 */
-  --bg-input: 223deg 18% 18%;     /* #252e44 */
+  /* ── Rose Dusk Pastel Dark Mode ── */
+  --bg-base: 10deg 12% 14%;        /* #272020 warm charcoal */
+  --bg-surface: 8deg 14% 18%;      /* #2f2220 deeper warm surface */
+  --bg-card: 6deg 16% 22%;         /* #3a2826 dusty rose-charcoal card */
+  --bg-input: 4deg 15% 26%;        /* #422e2c input field */
   
-  --text-primary: 210deg 40% 98%;   /* #f1f5f9 */
-  --text-secondary: 215deg 20% 65%; /* #94a3b8 */
-  --text-muted: 215deg 16% 47%;     /* #64748b */
+  --text-primary: 25deg 30% 95%;   /* #f7f0ec warm cream white */
+  --text-secondary: 15deg 18% 68%; /* #b8a09a soft rose-grey */
+  --text-muted: 12deg 14% 50%;     /* #8a6e69 muted mauve */
 
-  /* Accents */
-  --accent: 263deg 90% 65%;         /* Violet: #8b5cf6 */
-  --accent-glow: 263deg 90% 65% / 0.15;
+  /* Accents — soft coral & peach */
+  --accent: 12deg 65% 68%;          /* Soft coral: #e0836b */
+  --accent-glow: 12deg 65% 68% / 0.15;
   
   /* Ticket Status Colors */
-  --status-open-hue: 142deg;        /* Emerald / Green */
-  --status-pending-hue: 45deg;      /* Amber / Yellow */
-  --status-closed-hue: 355deg;      /* Red */
+  --status-open-hue: 155deg;        /* Soft sage green */
+  --status-pending-hue: 38deg;      /* Warm amber */
+  --status-closed-hue: 355deg;      /* Soft rose red */
   
-  --danger-hue: 350deg;             /* Red */
-  
+  --danger-hue: 350deg;
+
   /* Fonts */
   --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   
@@ -35,13 +35,14 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.38);
   
-  --glass-bg: rgba(20, 27, 45, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-bg: rgba(47, 34, 32, 0.75);
+  --glass-border: rgba(255, 210, 200, 0.07);
 }
+
 
 /* Base resets & styles */
 * {
@@ -85,7 +86,7 @@ body {
   min-height: 100vh;
   position: relative;
   background: linear-gradient(180deg, hsl(var(--bg-base)) 0%, hsl(var(--bg-surface)) 100%);
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.45);
 }
 
 header {
@@ -111,7 +112,7 @@ header {
 .logo h1 {
   font-size: 24px;
   font-weight: 800;
-  background: linear-gradient(135deg, #fff 0%, hsl(var(--text-secondary)) 100%);
+  background: linear-gradient(135deg, hsl(25deg 30% 95%) 0%, hsl(var(--text-secondary)) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.5px;
@@ -148,13 +149,13 @@ header {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, hsl(var(--accent)) 0%, #7c3aed 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(355deg 55% 58%) 100%);
+  color: hsl(25deg 30% 95%);
+  box-shadow: 0 4px 12px rgba(224, 131, 107, 0.3);
 }
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 6px 16px rgba(224, 131, 107, 0.45);
 }
 .btn-primary:active {
   transform: translateY(0);
@@ -186,7 +187,7 @@ header {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(4, 7, 13, 0.8);
+  background: rgba(20, 12, 11, 0.8);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -300,7 +301,7 @@ header {
 
 .form-control:focus {
   border-color: hsl(var(--accent));
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 0 3px rgba(224, 131, 107, 0.18);
   background: hsl(var(--bg-card));
 }
 
@@ -454,7 +455,7 @@ textarea.form-control {
 
 /* Month Grouping */
 .month-group-header {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.1));
+  background: linear-gradient(135deg, rgba(224, 131, 107, 0.12), rgba(180, 100, 90, 0.08));
   padding: 14px 16px;
   border-radius: var(--radius-md);
   margin-top: 16px;
@@ -462,7 +463,7 @@ textarea.form-control {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(224, 131, 107, 0.2);
   cursor: pointer;
   user-select: none;
   transition: background 0.2s, border-color 0.2s;
@@ -473,8 +474,8 @@ textarea.form-control {
 }
 
 .month-group-header:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.15));
-  border-color: rgba(139, 92, 246, 0.35);
+  background: linear-gradient(135deg, rgba(224, 131, 107, 0.2), rgba(180, 100, 90, 0.12));
+  border-color: rgba(224, 131, 107, 0.35);
 }
 
 .month-group-header h3 {
@@ -490,7 +491,7 @@ textarea.form-control {
   max-height: 5000px;
   opacity: 1;
   padding-left: 8px;
-  border-left: 2px solid rgba(139, 92, 246, 0.15);
+  border-left: 2px solid rgba(224, 131, 107, 0.18);
   margin-left: 4px;
 }
 
@@ -522,8 +523,8 @@ textarea.form-control {
 }
 
 .history-item:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02) linear-gradient(0deg, hsl(var(--bg-card)) 0%, hsl(var(--bg-input)) 100%);
+  border-color: rgba(255, 210, 200, 0.1);
+  background: rgba(255, 210, 200, 0.02) linear-gradient(0deg, hsl(var(--bg-card)) 0%, hsl(var(--bg-input)) 100%);
 }
 
 .history-left {
@@ -789,7 +790,7 @@ textarea.form-control {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, hsl(var(--accent)), hsl(var(--status-open-hue) 80% 55%));
+  background: linear-gradient(90deg, hsl(var(--accent)), hsl(355deg 60% 65%));
 }
 
 .payroll-summary-card h3 {
@@ -862,12 +863,12 @@ textarea.form-control {
 }
 
 .payday-item:hover {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 210, 200, 0.1);
 }
 
 .payday-item.is-next {
   border-color: hsl(var(--accent) / 0.4);
-  background: linear-gradient(135deg, hsl(var(--bg-card)) 0%, rgba(139, 92, 246, 0.08) 100%);
+  background: linear-gradient(135deg, hsl(var(--bg-card)) 0%, rgba(224, 131, 107, 0.07) 100%);
 }
 
 .payday-item.is-past {
@@ -891,23 +892,23 @@ textarea.form-control {
 
 .payday-label.past {
   color: hsl(var(--text-muted));
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 210, 200, 0.05);
 }
 
 .payday-label.next {
   color: hsl(var(--accent));
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(224, 131, 107, 0.15);
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .payday-label.future {
   color: hsl(var(--text-secondary));
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 210, 200, 0.05);
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
-  50% { box-shadow: 0 0 8px 2px rgba(139, 92, 246, 0.25); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 131, 107, 0); }
+  50% { box-shadow: 0 0 8px 2px rgba(224, 131, 107, 0.3); }
 }
 
 /* Unpaid Timesheets List in Payroll */
@@ -1000,9 +1001,9 @@ textarea.form-control {
 }
 
 .nav-tab.active {
-  background: linear-gradient(135deg, hsl(var(--accent)) 0%, #7c3aed 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(355deg 55% 58%) 100%);
+  color: hsl(25deg 30% 95%);
+  box-shadow: 0 4px 12px rgba(224, 131, 107, 0.25);
 }
 
 @media print {
